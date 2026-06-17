@@ -1,0 +1,83 @@
+{
+  "count": 6,
+  "hotspots": [
+    {
+      "hotspot_id": "HS001",
+      "lat": 12.9255567,
+      "lng": 77.618665,
+      "risk_score": 87.4,
+      "violation_count": 142,
+      "dominant_violation": "PARKING IN A MAIN ROAD",
+      "dominant_vehicle": "CAR",
+      "peak_window": "Mon–Fri 18:00–21:00",
+      "police_station": "Madiwala",
+      "junction_name": null,
+      "near_poi": "Koramangala Commercial"
+    },
+    {
+      "hotspot_id": "HS002",
+      "lat": 12.9784,
+      "lng": 77.6408,
+      "risk_score": 74.1,
+      "violation_count": 98,
+      "dominant_violation": "WRONG PARKING",
+      "dominant_vehicle": "SCOOTER",
+      "peak_window": "Mon–Sat 09:00–11:00",
+      "police_station": "Shivajinagar",
+      "junction_name": "Brigade Road Junction",
+      "near_poi": null
+    },
+    {
+      "hotspot_id": "HS003",
+      "lat": 12.9352,
+      "lng": 77.6245,
+      "risk_score": 61.8,
+      "violation_count": 77,
+      "dominant_violation": "NO PARKING",
+      "dominant_vehicle": "CAR",
+      "peak_window": "Sat–Sun 11:00–14:00",
+      "police_station": "Koramangala",
+      "junction_name": null,
+      "near_poi": "Indiranagar Metro"
+    },
+    {
+      "hotspot_id": "HS004",
+      "lat": 12.9058,
+      "lng": 77.5963,
+      "risk_score": 53.0,
+      "violation_count": 64,
+      "dominant_violation": "PARKING NEAR ROAD CROSSING",
+      "dominant_vehicle": "AUTO",
+      "peak_window": "Mon–Fri 08:00–10:00",
+      "police_station": "Jayanagar",
+      "junction_name": "Jayanagar 4th Block Circle",
+      "near_poi": null
+    },
+    {
+      "hotspot_id": "HS005",
+      "lat": 13.0100,
+      "lng": 77.5500,
+      "risk_score": 39.2,
+      "violation_count": 45,
+      "dominant_violation": "WRONG PARKING",
+      "dominant_vehicle": "CAR",
+      "peak_window": "Mon–Fri 17:00–20:00",
+      "police_station": "Yeshwanthpur",
+      "junction_name": null,
+      "near_poi": "Yeshwanthpur Metro"
+    },
+    {
+      "hotspot_id": "HS006",
+      "lat": 12.9592,
+      "lng": 77.7225,
+      "risk_score": 28.5,
+      "violation_count": 31,
+      "dominant_violation": "NO PARKING",
+      "dominant_vehicle": "SCOOTER",
+      "peak_window": "Sat 10:00–13:00",
+      "police_station": "Whitefield",
+      "junction_name": null,
+      "near_poi": null
+    }
+  ]
+}

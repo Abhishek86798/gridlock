@@ -1,0 +1,19 @@
+# Added by code-review-graph
+.code-review-graph/
+.claude\
+.cursor
+.gemini
+.github
+.kiro
+.qoder
+.vscode
+
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+
+
+data/raw/*.csv
+data/processed/
+*.parquet
+dataset\voilations.csv
