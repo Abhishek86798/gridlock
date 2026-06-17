@@ -17,3 +17,5 @@ data/raw/*.csv
 data/processed/
 *.parquet
 dataset\voilations.csv
+
+.venv
