@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     def repeat_offenders_parquet(self) -> Path:
         return self.processed_dir / "repeat_offenders.parquet"
 
+    @property
+    def by_station_parquet(self) -> Path:
+        return self.processed_dir / "by_station.parquet"
+
+    @property
+    def by_junction_parquet(self) -> Path:
+        return self.processed_dir / "by_junction.parquet"
+
     # ── Coordinate validation (Bengaluru bounding box) ────────────────────────
     lat_min: float = 12.834
     lat_max: float = 13.143

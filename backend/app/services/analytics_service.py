@@ -24,7 +24,7 @@ def get_priority(**filters) -> PriorityResponse:
             "rank": rank,
             "hotspot_id": row["hotspot_id"],
             "risk_score": row["risk_score"],
-            "peak_window": row["peak_window"],
+            "logging_window": row["logging_window"],
             "police_station": row["police_station"],
             "recommended_units": max(1, int(row["risk_score"] // 30)),
         })
@@ -34,15 +34,17 @@ def get_priority(**filters) -> PriorityResponse:
 def get_stats(**filters) -> StatsResponse:
     vdf = _load("violations")
     hdf = _load("hotspots")
+    dt_col = "created_ist" if "created_ist" in vdf.columns else "created_datetime"
+    dates  = vdf[dt_col].dropna()
     return StatsResponse(
         total_violations=len(vdf),
         total_hotspots=len(hdf),
         date_range={
-            "start": str(vdf["created_at"].min().date()),
-            "end": str(vdf["created_at"].max().date()),
+            "start": str(dates.min().date()) if len(dates) else "unknown",
+            "end":   str(dates.max().date()) if len(dates) else "unknown",
         },
         by_vehicle_type=vdf["vehicle_type"].value_counts().to_dict(),
-        by_violation_type=vdf["violation_type"].value_counts().to_dict(),
+        by_violation_type=vdf["primary_violation_type"].value_counts().to_dict(),
         by_police_station=vdf["police_station"].value_counts().to_dict(),
     )
 
@@ -58,7 +60,7 @@ def get_patrol(units: int = 10) -> PatrolResponse:
     total_score = _load("hotspots")["risk_score"].sum()
     covered = df["risk_score"].sum()
     assignments = [
-        {"unit_id": i + 1, "hotspot_id": row["hotspot_id"], "time_window": row["peak_window"]}
+        {"unit_id": i + 1, "hotspot_id": row["hotspot_id"], "time_window": row["logging_window"]}
         for i, (_, row) in enumerate(df.iterrows())
     ]
     coverage_pct = round(covered / total_score * 100, 1) if total_score else 0.0

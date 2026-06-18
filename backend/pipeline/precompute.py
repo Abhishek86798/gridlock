@@ -2,23 +2,25 @@
 Step 2 - Precompute all ML artifacts from violations.parquet.
 
 Run after build_dataset.py:
-    python -m backend.pipeline.precompute            # all steps
-    python -m backend.pipeline.precompute --steps hotspots temporal
+    python -m backend.pipeline.precompute                      # all steps
+    python -m backend.pipeline.precompute --steps hotspots temporal aggregations
 
 Writes:
     data/processed/hotspots.parquet    (Step 2.1 - H3 hexbin clustering + risk score)
     data/processed/temporal.parquet    (Step 2.2 - hour x weekday matrices)
+    data/processed/by_station.parquet  (Step 2.5 - police-station rollup)
+    data/processed/by_junction.parquet (Step 2.5 - named-junction rollup)
 
 Stubs (built next):
-    data/processed/forecast.parquet    (Step 2.3)
-    data/processed/repeat_offenders.parquet  (Step 2.4)
+    data/processed/forecast.parquet
+    data/processed/repeat_offenders.parquet
 
 Data-quality gate:
     Runs a statistical batch-hour check before any time-based computation.
     An hour bin is flagged when its count is >BATCH_THRESHOLD x the median
     of its two neighbors - the signature of a fixed camera doing a bulk upload
     at a specific hour. If flagged hours are found they are excluded from
-    peak_window derivation and temporal matrix (but kept for spatial counts).
+    logging_window derivation and temporal matrix (but kept for spatial counts).
     This dataset passes the check cleanly; the gate exists for future feeds.
 """
 
@@ -26,12 +28,12 @@ from __future__ import annotations
 
 import argparse
 import time
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from backend.app.core.config import settings
+from backend.app.services.aggregations import by_junction, by_police_station
 from backend.app.services.hotspots import compute_hotspots
 from backend.app.services.temporal import compute_temporal
 
@@ -39,7 +41,7 @@ from backend.app.services.temporal import compute_temporal
 # flagged as a batch-upload artifact.
 BATCH_THRESHOLD: float = 3.0
 
-_ALL_STEPS = ("hotspots", "temporal")
+_ALL_STEPS = ("hotspots", "temporal", "aggregations")
 
 
 # ---- data quality gate -------------------------------------------------------
@@ -133,6 +135,27 @@ def step_temporal(
     return temporal
 
 
+def step_aggregations(
+    violations: pd.DataFrame,
+    hotspots: pd.DataFrame,
+) -> None:
+    """Roll up hotspots by police station and named junction; write parquets."""
+    station_df = by_police_station(hotspots, violations)
+    dest_st = settings.by_station_parquet
+    dest_st.parent.mkdir(parents=True, exist_ok=True)
+    station_df.to_parquet(dest_st, index=False, engine="pyarrow")
+    print(f"   Written  : {dest_st}  ({dest_st.stat().st_size / 1024:.0f} KB)")
+    print(f"   Stations : {len(station_df):,}  "
+          f"(avg_risk {station_df['avg_risk_score'].mean():.1f}, "
+          f"city blind_spot_pct {station_df['blind_spot_pct'].mean():.0f}%)")
+
+    junction_df = by_junction(hotspots, violations)
+    dest_jn = settings.by_junction_parquet
+    junction_df.to_parquet(dest_jn, index=False, engine="pyarrow")
+    print(f"   Written  : {dest_jn}  ({dest_jn.stat().st_size / 1024:.0f} KB)")
+    print(f"   Junctions: {len(junction_df):,} named junctions")
+
+
 # ---- orchestrator ------------------------------------------------------------
 
 def run(steps: list[str] | None = None) -> None:
@@ -188,6 +211,20 @@ def run(steps: list[str] | None = None) -> None:
         t2 = time.perf_counter()
         step_temporal(violations, hotspots, batch_hours)
         print(f"   Elapsed  : {time.perf_counter() - t2:.1f}s")
+
+    # ── Step 2.5 ─────────────────────────────────────────────────────────────
+    if "aggregations" in steps:
+        if hotspots is None:
+            if not settings.hotspots_parquet.exists():
+                raise FileNotFoundError(
+                    "hotspots.parquet not found. Run with --steps hotspots first."
+                )
+            hotspots = pd.read_parquet(settings.hotspots_parquet)
+        print()
+        print("-- Step 2.5: Station + junction aggregations ----------------")
+        t5 = time.perf_counter()
+        step_aggregations(violations, hotspots)
+        print(f"   Elapsed  : {time.perf_counter() - t5:.1f}s")
 
     # ── Done ──────────────────────────────────────────────────────────────────
     print()
