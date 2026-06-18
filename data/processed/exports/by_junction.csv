@@ -1,0 +1,154 @@
+junction_name,hotspot_count,total_violations,avg_risk_score,max_risk_score,top_hotspot_id,police_station,dominant_violation
+BTP051 - Safina Plaza Junction,7,6918,45.96,52.93,HS-0077,Shivajinagar,WRONG PARKING
+BTP044 - Sagar Theatre Junction,3,5921,51.91,55.61,HS-0045,Upparpet,NO PARKING
+BTP040 - Elite Junction,1,5366,54.53,54.53,HS-0064,Upparpet,NO PARKING
+BTP082 - KR Market Junction,5,3809,50.59,55.23,HS-0052,City Market,WRONG PARKING
+BTP211 - Central Street Junction,6,2537,51.19,58.29,HS-0030,Shivajinagar,WRONG PARKING
+BTP027 - Modi Bridge Junction,2,2356,50.64,51.92,HS-0097,Malleshwaram,WRONG PARKING
+BTP057 - Anand Rao Junction,5,1928,46.02,55.89,HS-0042,Sheshadripuram,WRONG PARKING
+BTP020 - Hosahalli Metro Station,4,1855,39.38,49.1,HS-0166,Vijayanagara,WRONG PARKING
+BTP032 - Windsor Circle,6,1722,44.26,49.97,HS-0138,High ground,WRONG PARKING
+BTP058 - Subbanna Junction,3,1559,50.43,53.03,HS-0074,Upparpet,NO PARKING
+"BTP080 - NR Road, SP Road Junction",3,1432,48.99,52.51,HS-0088,Halasuru Gate,WRONG PARKING
+"BTP001 - 10th Cross, Dr. Rajkumar Road",4,1376,46.29,51.99,HS-0096,Malleshwaram,WRONG PARKING
+"BTP016 - 5th Main Road, RPC Layout",3,1337,48.79,53.32,HS-0071,Vijayanagara,WRONG PARKING
+BTP023 - Mahalaxmi Layout Entrance,5,1248,46.96,51.38,HS-0107,Malleshwaram,WRONG PARKING
+BTP038 - Mysore Bank Junction,5,1242,46.71,55.04,HS-0055,Halasuru Gate,WRONG PARKING
+BTP043 - Upparpet Junction,3,1159,45.81,49.96,HS-0139,Upparpet,WRONG PARKING
+"BTP070 - Cholurpalya Junction, Magadi Road",1,992,43.83,43.83,HS-0408,Magadi Road,NO PARKING
+BTP042 - Minsk Square Junction (CTO),2,929,43.53,47.14,HS-0242,Cubbon Park,NO PARKING
+BTP108 - Tagore Park Junction,5,857,42.5,48.16,HS-0202,Basavanagudi,WRONG PARKING
+BTP104 - Medical College Circle,2,798,52.07,54.62,HS-0061,City Market,WRONG PARKING
+"BTP083 - AS Char Street, Mysore Road",2,778,57.24,59.47,HS-0023,Chamarajpet,WRONG PARKING
+BTP074 - Leprosy Hospital Junction,7,759,43.2,48.57,HS-0182,Magadi Road,WRONG PARKING
+BTP054 - Shivananda Circle,7,642,43.63,46.76,HS-0255,High ground,NO PARKING
+BTP008 - Navarang Theatre,3,615,44.43,50.16,HS-0134,Malleshwaram,WRONG PARKING
+"BTP148 - 17th Main, Doopanahalli Bus Stop",4,586,46.53,48.57,HS-0183,Jeevanbheemanagar,NO PARKING
+BTP172 - Nanjappa Circle,6,563,37.76,41.09,HS-0598,Ashok Nagar,NO PARKING
+"BTP011 - RR Kalyana Mantapa, Dr. Rajkumar Road",4,562,47.19,54.9,HS-0058,Rajajinagar,WRONG PARKING
+"BTP022 - Marenahalli Junction, Vijayanagar",3,561,43.9,45.3,HS-0334,Vijayanagara,WRONG PARKING
+BTP048 - Shanthala Junction,3,561,48.37,50.06,HS-0136,Chamarajpet,NO PARKING
+BTP063 - Siddalingaiah Circle,5,542,44.18,47.97,HS-0210,Cubbon Park,NO PARKING
+BTP135 - UCO Bank Junction,3,511,41.56,45.92,HS-0299,Adugodi,NO PARKING
+BTP069 - MC Circle,2,459,47.81,48.38,HS-0191,Magadi Road,WRONG PARKING
+"BTP095 - Satellite Bus Stand, Mysore Road",2,459,46.75,52.37,HS-0090,Byatarayanapura,WRONG PARKING
+BTP010 - Rajajinagar Entrance,6,456,42.54,45.04,HS-0349,Magadi Road,NO PARKING
+"BTP026 - 1st Block Junction, Rajajinagar",1,437,51.7,51.7,HS-0101,Malleshwaram,WRONG PARKING
+BTP061 - Bhashyam Circle,3,389,44.79,45.86,HS-0302,Rajajinagar,NO PARKING
+BTP192 - Urvashi Theater,2,336,43.26,44.93,HS-0352,Wilson Garden,NO PARKING
+BTP136 - Hosur-Tavarkere Road Junction,4,318,47.22,63.06,HS-0006,Mico Layout,NO PARKING
+"BTP163 - 16th Main Road, BTM Layout",4,287,38.14,42.34,HS-0510,Mico Layout,NO PARKING
+BTP028 - Vijayanagar Bus Stand Junction,2,273,47.78,48.35,HS-0194,Vijayanagara,WRONG PARKING
+"BTP206 - Shankara Mutt Circle, Vijayanagar",2,272,46.53,49.46,HS-0153,Vijayanagara,WRONG PARKING
+"BTP189 - New Diagonal Road, Jayanagar",2,270,41.16,42.32,HS-0512,Jayanagara,NO PARKING
+BTP096 - Gali Anjaneya Temple,3,268,48.61,58.54,HS-0028,Byatarayanapura,NO PARKING
+BTP141 - Palmgroove Junction,3,256,38.91,42.32,HS-0511,Halasur,NO PARKING
+BTP218 - Syndicate Bank Junction,2,250,36.49,39.85,HS-0704,Jayanagara,NO PARKING
+BTP205 - Modi Hospital Junction,3,250,46.67,47.32,HS-0232,Vijayanagara,WRONG PARKING
+BTP208 - Havanur Circle,4,241,45.25,47.89,HS-0212,Kamakshipalya,WRONG PARKING
+BTP137 - Madiwala Traffic PS Junction,5,240,42.59,51.5,HS-0104,Madiwala,NO PARKING
+BTP219 - Canara Bank Junction,2,231,44.19,45.49,HS-0323,Jayanagara,NO PARKING
+BTP017 - Attiguppe Circle,3,210,37.3,42.63,HS-0487,Byatarayanapura,WRONG PARKING
+BTP068 - Veeresh Theatre Junction,1,210,42.17,42.17,HS-0521,Vijayanagara,NO PARKING
+"BTP226 - 33rd Cross, 11th Main, Jayanagar",5,205,41.69,51.22,HS-0110,Jayanagara,NO PARKING
+"BTP101 - Blood Bank Circle, KH Road",2,202,42.58,45.69,HS-0309,Ashok Nagar,NO PARKING
+"BTP204 - ESI Hospital, Rajajinagar",2,201,46.76,48.99,HS-0173,Rajajinagar,WRONG PARKING
+BTP018 - Dhobi Ghat Junction,3,196,45.46,51.55,HS-0103,Vijayanagara,WRONG PARKING
+"BTP024 - NPS, Vijayanagar",4,195,42.59,47.2,HS-0240,Magadi Road,NO PARKING
+BTP140 - Madiwala Check Post,4,194,44.65,56.28,HS-0039,Adugodi,NO PARKING
+"BTP062 - Basava Mantapa, Dr. Rajkumar Road",3,187,47.83,55.19,HS-0053,Magadi Road,NO PARKING
+"BTP099 - Cash Pharmacy, Residency Road",6,173,43.1,52.82,HS-0084,Ashok Nagar,NO PARKING
+BTP067 - Jai Muni Rao Circle,2,165,42.89,45.37,HS-0328,Magadi Road,WRONG PARKING
+BTP220 - Puttanna Junction,1,159,45.37,45.37,HS-0329,Jayanagara,NO PARKING
+"BTP210 - 50th cross, 12th Main , Rajajinagar",1,158,45.68,45.68,HS-0311,Rajajinagar,NO PARKING
+"BTP115 - Sahasra Hospital, Jayanagar",1,156,43.6,43.6,HS-0423,Jayanagara,NO PARKING
+BTP009 - Prakash Nagar Junction,2,156,44.48,45.52,HS-0320,Rajajinagar,WRONG PARKING
+BTP076 - Hudson Circle,1,152,42.45,42.45,HS-0500,Halasuru Gate,NO PARKING
+BTP034 - LRDE Junction,1,146,45.81,45.81,HS-0304,High ground,WRONG PARKING
+BTP037 - KR Circle,2,144,45.94,49.7,HS-0147,Cubbon Park,WRONG PARKING
+BTP041 - Gopal Gowda Circle,3,141,39.46,45.79,HS-0305,Cubbon Park,NO PARKING
+BTP071 - Prasanna Junction,2,133,36.78,39.62,HS-0719,Magadi Road,NO PARKING
+BTP091 - Sirsi Circle,5,133,44.2,51.08,HS-0114,Magadi Road,NO PARKING
+BTP225 - Geetha Junction,1,130,40.93,40.93,HS-0617,Jayanagara,NO PARKING
+BTP098 - Nayandahalli Junction,6,126,59.13,66.8,HS-0002,Byatarayanapura,PARKING IN A MAIN ROAD
+"BTP145 - Sri Hatti Maramma Circle, Domluru",2,126,41.29,41.99,HS-0534,Halasur,NO PARKING
+BTP167 - JC Road Junction,2,119,49.85,51.46,HS-0105,City Market,WRONG PARKING
+"BTP186 - 9th Cross, 4th Main, Jayanagar",3,115,40.43,41.0,HS-0608,Basavanagudi,WRONG PARKING
+"BTP117 - 9th Cross, Kanakapura Road",4,110,37.78,46.85,HS-0252,K.S. Layout,WRONG PARKING
+BTP155 - Katriguppe Junction,1,109,39.32,39.32,HS-0738,Banashankari,NO PARKING
+"BTP033 - Sophia High School, Sankey Road",2,108,43.11,43.96,HS-0401,High ground,WRONG PARKING
+"BTP123 - 10th Cross, Wilson Garden",4,105,39.01,40.6,HS-0645,Wilson Garden,NO PARKING
+BTP075 - Police Corner,2,101,43.99,47.26,HS-0236,Halasuru Gate,WRONG PARKING
+BTP180 - Swagath Poornima Theatre,2,100,44.98,49.18,HS-0165,Halasuru Gate,NO PARKING
+BTP047 - Vidhan Soudha Metro Station,1,99,43.17,43.17,HS-0455,Cubbon Park,NO PARKING
+"BTP197 - 9th Cross, 24th Main, JP Nagar",3,99,43.6,44.72,HS-0362,J.P. Nagar,NO PARKING
+BTP184 - Lalbagh West Gate,3,97,41.32,44.1,HS-0390,Basavanagudi,WRONG PARKING
+BTP052 - CID Carlton House Junction,2,97,40.33,44.4,HS-0377,Cubbon Park,NO PARKING
+"BTP113 - 27th Cross, Pai Vista, KR Road",1,96,39.06,39.06,HS-0761,Banashankari,NO PARKING
+BTP126 - Dairy Circle,2,95,55.31,55.92,HS-0041,Mico Layout,PARKING IN A MAIN ROAD
+BTP214 - 5th Main Chamrajpet  Junction,3,93,44.61,46.52,HS-0268,Vijayanagara,WRONG PARKING
+BTP143 - ASC Junction,1,93,40.16,40.16,HS-0677,Halasur,NO PARKING
+"BTP188 - 27th Cross, 4th Main, Jayanagar",1,89,38.64,38.64,HS-0791,Jayanagara,NO PARKING
+BTP130 - GD Mara Junction,3,85,35.24,37.24,HS-0878,Mico Layout,NO PARKING
+BTP045 - Danvanthri Road Junction,1,85,48.98,48.98,HS-0174,Upparpet,WRONG PARKING
+BTP120 - Lalbagh Main Gate Junction,3,85,45.06,48.49,HS-0187,City Market,WRONG PARKING
+"BTP176 - Rajalakshmi Kalyana Mantapa, JP Nagar",2,85,41.32,47.67,HS-0220,J.P. Nagar,NO PARKING
+BTP122 - Siddapura Junction,4,81,38.73,39.04,HS-0764,Wilson Garden,NO PARKING
+BTP103 - Shanti Nagar TTMC,1,80,44.92,44.92,HS-0353,Wilson Garden,NO PARKING
+BTP171 - Indian Express (Balekundri),1,79,43.88,43.88,HS-0405,High ground,WRONG PARKING
+BTP085 - Briyand Circle,5,78,42.58,45.52,HS-0322,Chamarajpet,WRONG PARKING
+BTP118 - Basappa Circle,1,77,42.63,42.63,HS-0486,City Market,WRONG PARKING
+"BTP170 - Dr. Bheem Rao Palace, Chord Road",1,76,50.65,50.65,HS-0120,Vijayanagara,WRONG PARKING
+BTP166 - Coffee Board Junction,2,71,41.11,43.4,HS-0441,Cubbon Park,NO PARKING
+"BTP221 - 15th Cross, 24th Main, JP Nagar",3,71,46.17,48.08,HS-0206,J.P. Nagar,NO PARKING
+BTP132 - Anepalya Junction,4,70,40.33,46.08,HS-0290,Ashok Nagar,NO PARKING
+"BTP177 - Aurobindo Circle, ORR",2,67,46.84,48.34,HS-0196,J.P. Nagar,NO PARKING
+"BTP102 - BMTC Junction, KH Road",4,64,41.01,45.91,HS-0300,Wilson Garden,NO PARKING
+BTP215 - Vanivillas Junction,2,64,43.58,46.14,HS-0285,Basavanagudi,NO PARKING
+BTP222 - Delmia Circle,4,64,38.41,42.8,HS-0474,J.P. Nagar,NO PARKING
+BTP121 - KH Circle,2,62,40.42,42.59,HS-0493,Wilson Garden,NO PARKING
+BTP196 - Sarakki Main Road,3,59,41.78,44.14,HS-0388,J.P. Nagar,WRONG PARKING
+BTP207 - 8th Main Road Basaveshwara Nagar,3,54,43.39,43.71,HS-0410,Vijayanagara,WRONG PARKING
+BTP109 - Dewan Madhava Rao Junction,1,54,38.49,38.49,HS-0801,Basavanagudi,NO PARKING
+BTP216 - Yediyur Junction,1,51,48.13,48.13,HS-0204,Basavanagudi,WRONG PARKING
+"BTP191 - 40th Cross, 4th Main, Jayanagar",1,51,44.08,44.08,HS-0391,Jayanagara,WRONG PARKING
+BTP119 - Minerva Circle,1,43,40.35,40.35,HS-0665,City Market,WRONG PARKING
+"BTP202 - East End Main Road, Jayanagar",2,41,51.98,52.37,HS-0091,Jayanagara,PARKING IN A MAIN ROAD
+"BTP159 - JP Nagar Metro, ORR",2,40,41.69,42.96,HS-0465,J.P. Nagar,NO PARKING
+"BTP190 - 36th Cross, 4th Main, Jayanagar",1,40,34.47,34.47,HS-1021,Jayanagara,NO PARKING
+BTP092 - Bangalore Builders Junction,3,39,51.13,58.25,HS-0031,Chamarajpet,PARKING IN A MAIN ROAD
+BTP193 - Vasavi Circle,1,37,38.97,38.97,HS-0771,V.V.Puram (C.Pet),NO PARKING
+"BTP179 - 9th Block, 28th Main, Jayanagar",1,37,53.72,53.72,HS-0068,Jayanagara,PARKING ON FOOTPATH
+BTP146 - Domlur Water Tank,2,37,37.14,38.89,HS-0776,Halasur,NO PARKING
+"BTP094 - Sri Skanda Complex, Mysore Road",2,36,49.89,50.33,HS-0127,Byatarayanapura,NO PARKING
+"BTP168 - MSR Building, JC Road",1,36,42.88,42.88,HS-0471,Halasuru Gate,NO PARKING
+BTP185 - RV Teachers College,2,34,41.65,43.28,HS-0450,Basavanagudi,NO PARKING
+BTP106 - VV Puram College,1,31,43.58,43.58,HS-0427,V.V.Puram (C.Pet),WRONG PARKING
+"BTP089 - Police Quarters, Sultan Road",2,30,62.56,64.31,HS-0003,Chamarajpet,PARKING IN A MAIN ROAD
+BTP217 - Baleyele Junction,2,30,35.23,37.06,HS-0893,V.V.Puram (C.Pet),NO PARKING
+BTP064 - Devanga Hostel Junction,1,29,40.97,40.97,HS-0614,Halasuru Gate,NO PARKING
+BTP035 - Basaweshwara Circle (LH) Junction,1,28,41.68,41.68,HS-0547,High ground,NO PARKING
+BTP203 - RRMR Junction,1,28,43.85,43.85,HS-0407,Halasuru Gate,NO PARKING
+"BTP015 - Suguna Hospital, Dr. Rajkumar Road",1,27,43.76,43.76,HS-0409,Rajajinagar,WRONG PARKING
+BTP142 - Lower Agram Road Junction,2,23,52.53,59.12,HS-0026,Ashok Nagar,PARKING IN A MAIN ROAD
+BTP030 - Mekhri Circle,2,19,50.21,56.83,HS-0035,R.T. Nagar,WRONG PARKING
+BTP134 - Mico Bande,2,19,41.89,43.61,HS-0421,Adugodi,WRONG PARKING
+BTP053 - Three Let Junction,1,19,43.1,43.1,HS-0458,High ground,WRONG PARKING
+BTP077 - Halasuru Gate Junction,1,19,37.4,37.4,HS-0869,Halasuru Gate,WRONG PARKING
+BTP173 - TMC,1,18,45.54,45.54,HS-0318,Shivajinagar,WRONG PARKING
+"BTP025 - Puttamma Choultry, Nagarbhavi",1,16,40.0,40.0,HS-0692,Vijayanagara,NO PARKING
+BTP138 - Sarjapur Road Check Post,1,15,40.89,40.89,HS-0619,Madiwala,NO PARKING
+"BTP114 - KR Road Junction, Near JSS",2,15,40.51,43.4,HS-0443,Banashankari,NO PARKING
+BTP105 - Shivasankara Circle,1,15,34.69,34.69,HS-1011,V.V.Puram (C.Pet),NO PARKING
+BTP100 - Richmond Circle,1,13,37.51,37.51,HS-0864,Ashok Nagar,NO PARKING
+BTP128 - Gorappanapalya Junction,1,13,37.64,37.64,HS-0852,Mico Layout,NO PARKING
+"BTP127 - Sagar Hospital, Jayanagar",1,12,47.13,47.13,HS-0243,Jayanagara,NO PARKING
+"BTP200 - 15th Cross, 33rd Main, JP Nagar",1,10,38.76,38.76,HS-0785,J.P. Nagar,NO PARKING
+BTP133 - Adugodi Junction,2,10,44.33,47.63,HS-0221,Adugodi,WRONG PARKING
+"BTP093 - Toll Gate, Mysore Road",1,8,50.06,50.06,HS-0135,Chamarajpet,WRONG PARKING
+BTP158 - Devegowda Petrol Bunk,1,8,43.56,43.56,HS-0428,Banashankari,WRONG PARKING
+"BTP161 - 15th Cross, 35th Main, JP Nagar",1,7,48.52,48.52,HS-0186,J.P. Nagar,WRONG PARKING
+BTP212 - Minto Junction,1,6,39.41,39.41,HS-0730,V.V.Puram (C.Pet),NO PARKING
+"BTP112 - 14th Cross, KR Road",1,5,33.1,33.1,HS-1092,Banashankari,NO PARKING
+BTP144 - Commando Hospital Junction,1,5,32.95,32.95,HS-1094,Halasur,NO PARKING
+"BTP198 - 9th Cross, 8th Main, JP Nagar",1,5,40.3,40.3,HS-0672,J.P. Nagar,NO PARKING
