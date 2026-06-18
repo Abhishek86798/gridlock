@@ -104,7 +104,10 @@ SEVERITY_WEIGHTS: dict[str, float] = {
 }
 DEFAULT_SEVERITY: float = 1.0   # fallback for unknown violation types
 
-# Carriageway-blocking multiplier per vehicle class (larger = more obstruction).
+# Carriageway-blocking score per vehicle class, keyed to exact uppercased
+# strings in the dataset (0.0 = no obstruction, 1.0 = maximum).
+# VEHICLE_WEIGHTS uses the old abstract key names and is kept for reference;
+# VEHICLE_NORMALIZE is what features.py actually uses — keys match the data.
 VEHICLE_WEIGHTS: dict[str, float] = {
     "TANKER":       3.0,
     "TRUCK":        2.5,
@@ -115,4 +118,33 @@ VEHICLE_WEIGHTS: dict[str, float] = {
     "MOTORCYCLE":   1.0,
     "TWO WHEELER":  1.0,
 }
-DEFAULT_VEHICLE_WEIGHT: float = 1.0   # fallback for unknown vehicle types
+
+VEHICLE_NORMALIZE: dict[str, float] = {
+    # Two-wheelers — smallest carriageway footprint
+    "SCOOTER":              0.30,
+    "MOTOR CYCLE":          0.30,
+    "MOPED":                0.30,
+    # Three-wheelers / light passenger
+    "PASSENGER AUTO":       0.50,
+    "GOODS AUTO":           0.60,
+    # Cars / light four-wheelers
+    "CAR":                  0.70,
+    "JEEP":                 0.70,
+    "VAN":                  0.75,
+    "MAXI-CAB":             0.75,
+    # Light / medium goods
+    "TEMPO":                0.80,
+    "LGV":                  0.85,
+    "MINI LORRY":           0.90,
+    "TRACTOR":              0.90,
+    # Heavy / full-size — maximum obstruction
+    "HGV":                  1.00,
+    "LORRY/GOODS VEHICLE":  1.00,
+    "TANKER":               1.00,
+    "PRIVATE BUS":          1.00,
+    "BUS (BMTC/KSRTC)":     1.00,
+    "FACTORY BUS":          1.00,
+    "TOURIST BUS":          1.00,
+    "SCHOOL VEHICLE":       1.00,
+}
+DEFAULT_VEHICLE_WEIGHT: float = 0.5   # mid-value fallback; 1.0 overstates unknowns

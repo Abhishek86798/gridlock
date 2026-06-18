@@ -13,7 +13,9 @@ class Hotspot(BaseModel):
     violation_count: int
     dominant_violation: str
     dominant_vehicle: str
-    peak_window: str
+    logging_window: str          # dominant logging band: morning/overnight/split
+    morning_log_pct: float       # % logs in 06:00-11:59 (morning patrol coverage)
+    afternoon_log_pct: float     # % logs in 15:00-20:59 (blind-spot indicator)
     police_station: str
     junction_name: Optional[str] = None
     near_poi: Optional[str] = None
@@ -30,7 +32,7 @@ class PriorityItem(BaseModel):
     rank: int
     hotspot_id: str
     risk_score: float
-    peak_window: str
+    logging_window: str
     police_station: str
     recommended_units: int
 
