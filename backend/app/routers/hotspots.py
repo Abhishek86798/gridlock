@@ -1,46 +1,56 @@
-from fastapi import APIRouter, Query
-from typing import Optional
-
-from app.models.schemas import HotspotsResponse, HeatmapResponse, TemporalResponse
-from app.services import hotspot_service
+import json
+from pathlib import Path
+from fastapi import APIRouter
+from app.models.schemas import HotspotResponse, PriorityResponse, HeatmapResponse
 
 router = APIRouter()
 
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+MOCKS_DIR = BASE_DIR / "mocks"
 
-@router.get("/hotspots", response_model=HotspotsResponse)
-def get_hotspots(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    police_station: Optional[str] = Query(None),
-    vehicle_type: Optional[str] = Query(None),
-    violation_type: Optional[str] = Query(None),
-):
-    return hotspot_service.get_hotspots(
-        start_date=start_date,
-        end_date=end_date,
-        police_station=police_station,
-        vehicle_type=vehicle_type,
-        violation_type=violation_type,
-    )
+def load_mock(filename: str):
+    try:
+        with open(MOCKS_DIR / filename, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        return {}
 
+@router.get("/hotspots", response_model=HotspotResponse)
+def get_hotspots(start_date: str = None, end_date: str = None, police_station: str = None, vehicle_type: str = None, violation_type: str = None):
+    # Currently ignoring filters and returning mock data
+    data = load_mock("hotspots.sample.json")
+    return data
+
+@router.get("/priority", response_model=PriorityResponse)
+def get_priority():
+    data = load_mock("hotspots.sample.json")
+    # Transform hotspots to priority queue
+    hotspots = data.get("hotspots", [])
+    # Sort by risk score descending
+    hotspots.sort(key=lambda x: x["risk_score"], reverse=True)
+    
+    priority_items = []
+    for idx, hs in enumerate(hotspots):
+        priority_items.append({
+            "rank": idx + 1,
+            "hotspot_id": hs["hotspot_id"],
+            "risk_score": hs["risk_score"],
+            "peak_window": hs["peak_window"],
+            "police_station": hs["police_station"],
+            "recommended_units": max(1, int(hs["risk_score"] // 30))
+        })
+    return {"priority": priority_items}
 
 @router.get("/heatmap", response_model=HeatmapResponse)
-def get_heatmap(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    police_station: Optional[str] = Query(None),
-    vehicle_type: Optional[str] = Query(None),
-    violation_type: Optional[str] = Query(None),
-):
-    return hotspot_service.get_heatmap(
-        start_date=start_date,
-        end_date=end_date,
-        police_station=police_station,
-        vehicle_type=vehicle_type,
-        violation_type=violation_type,
-    )
-
-
-@router.get("/temporal/{hotspot_id}", response_model=TemporalResponse)
-def get_temporal(hotspot_id: str):
-    return hotspot_service.get_temporal(hotspot_id)
+def get_heatmap():
+    data = load_mock("hotspots.sample.json")
+    hotspots = data.get("hotspots", [])
+    
+    points = []
+    for hs in hotspots:
+        points.append({
+            "lat": hs["lat"],
+            "lng": hs["lng"],
+            "weight": hs["risk_score"] / 100.0
+        })
+    return {"points": points}
