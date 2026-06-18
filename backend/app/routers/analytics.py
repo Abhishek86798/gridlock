@@ -1,68 +1,44 @@
-from fastapi import APIRouter, Query
-from typing import Optional
-
-from app.models.schemas import (
-    PriorityResponse,
-    StatsResponse,
-    ForecastResponse,
-    PatrolResponse,
-    RepeatOffendersResponse,
-    EnforcementQualityResponse,
-)
-from app.services import analytics_service
+import json
+import random
+from pathlib import Path
+from fastapi import APIRouter
+from app.models.schemas import StatsResponse, TemporalResponse
 
 router = APIRouter()
 
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+MOCKS_DIR = BASE_DIR / "mocks"
 
-@router.get("/priority", response_model=PriorityResponse)
-def get_priority(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    police_station: Optional[str] = Query(None),
-    vehicle_type: Optional[str] = Query(None),
-    violation_type: Optional[str] = Query(None),
-):
-    return analytics_service.get_priority(
-        start_date=start_date,
-        end_date=end_date,
-        police_station=police_station,
-        vehicle_type=vehicle_type,
-        violation_type=violation_type,
-    )
-
+def load_mock(filename: str):
+    try:
+        with open(MOCKS_DIR / filename, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        return {}
 
 @router.get("/stats", response_model=StatsResponse)
-def get_stats(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    police_station: Optional[str] = Query(None),
-    vehicle_type: Optional[str] = Query(None),
-    violation_type: Optional[str] = Query(None),
-):
-    return analytics_service.get_stats(
-        start_date=start_date,
-        end_date=end_date,
-        police_station=police_station,
-        vehicle_type=vehicle_type,
-        violation_type=violation_type,
-    )
+def get_stats(start_date: str = None, end_date: str = None, police_station: str = None, vehicle_type: str = None, violation_type: str = None):
+    # Ignoring filters and returning mock data
+    data = load_mock("stats.sample.json")
+    return data
 
-
-@router.get("/forecast", response_model=ForecastResponse)
-def get_forecast():
-    return analytics_service.get_forecast()
-
-
-@router.get("/patrol", response_model=PatrolResponse)
-def get_patrol(units: int = Query(10, ge=1, le=100)):
-    return analytics_service.get_patrol(units=units)
-
-
-@router.get("/repeat-offenders", response_model=RepeatOffendersResponse)
-def get_repeat_offenders(limit: int = Query(20, ge=1, le=200)):
-    return analytics_service.get_repeat_offenders(limit=limit)
-
-
-@router.get("/enforcement-quality", response_model=EnforcementQualityResponse)
-def get_enforcement_quality():
-    return analytics_service.get_enforcement_quality()
+@router.get("/temporal/{hotspot_id}", response_model=TemporalResponse)
+def get_temporal(hotspot_id: str):
+    # We don't have a static mock file for temporal data, so we'll generate it dynamically
+    # based on the contract
+    matrix = []
+    for hour in range(24):
+        for day in range(7):
+            # Generate random counts, maybe peaking at certain times to look realistic
+            count = random.randint(0, 5)
+            if 16 <= hour <= 20:  # Peak evening hours
+                count += random.randint(5, 15)
+            matrix.append({
+                "hour": hour,
+                "day_of_week": day,
+                "count": count
+            })
+    return {
+        "hotspot_id": hotspot_id,
+        "matrix": matrix
+    }

@@ -1,63 +1,39 @@
-"""
-Thin wrapper around the backend API.
-Set USE_MOCK=True to load mocks/hotspots.sample.json instead of hitting the server.
-"""
-from __future__ import annotations
-import json
-from pathlib import Path
-from typing import Any
-
-import httpx
+import requests
+from typing import Dict, Any
 
 BASE_URL = "http://localhost:8000"
-USE_MOCK = False  # flip to True while backend is not yet running
 
-_MOCK_FILE = Path(__file__).parents[2] / "mocks" / "hotspots.sample.json"
+def get_hotspots(filters: Dict[str, Any] = None) -> Dict[str, Any]:
+    url = f"{BASE_URL}/hotspots"
+    response = requests.get(url, params=filters)
+    if response.status_code == 200:
+        return response.json()
+    return {"count": 0, "hotspots": []}
 
+def get_priority() -> Dict[str, Any]:
+    url = f"{BASE_URL}/priority"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    return {"priority": []}
 
-def _mock_hotspots() -> dict:
-    return json.loads(_MOCK_FILE.read_text())
+def get_heatmap() -> Dict[str, Any]:
+    url = f"{BASE_URL}/heatmap"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    return {"points": []}
 
+def get_stats(filters: Dict[str, Any] = None) -> Dict[str, Any]:
+    url = f"{BASE_URL}/stats"
+    response = requests.get(url, params=filters)
+    if response.status_code == 200:
+        return response.json()
+    return {}
 
-def get(endpoint: str, params: dict | None = None) -> Any:
-    if USE_MOCK and endpoint == "/hotspots":
-        return _mock_hotspots()
-    resp = httpx.get(f"{BASE_URL}{endpoint}", params=params, timeout=10)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def hotspots(filters: dict | None = None) -> dict:
-    return get("/hotspots", filters)
-
-
-def priority(filters: dict | None = None) -> dict:
-    return get("/priority", filters)
-
-
-def heatmap(filters: dict | None = None) -> dict:
-    return get("/heatmap", filters)
-
-
-def temporal(hotspot_id: str) -> dict:
-    return get(f"/temporal/{hotspot_id}")
-
-
-def stats(filters: dict | None = None) -> dict:
-    return get("/stats", filters)
-
-
-def forecast() -> dict:
-    return get("/forecast")
-
-
-def patrol(units: int = 10) -> dict:
-    return get("/patrol", {"units": units})
-
-
-def repeat_offenders(limit: int = 20) -> dict:
-    return get("/repeat-offenders", {"limit": limit})
-
-
-def enforcement_quality() -> dict:
-    return get("/enforcement-quality")
+def get_temporal(hotspot_id: str) -> Dict[str, Any]:
+    url = f"{BASE_URL}/temporal/{hotspot_id}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    return {"hotspot_id": hotspot_id, "matrix": []}
