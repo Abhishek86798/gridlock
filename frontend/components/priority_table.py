@@ -1,21 +1,23 @@
 import streamlit as st
 import pandas as pd
 
-from frontend.services import api_client
+from services import api_client
 
 
 def render(filters: dict):
     st.subheader("Enforcement Priority Queue")
-    data = api_client.priority(filters)
+    data = api_client.get_priority(
+        police_station=filters.get("police_station"),
+    )
     rows = data.get("priority", [])
     if not rows:
-        st.info("No data — run the ML pipeline first.")
+        st.info("No data — is the backend running?")
         return
 
     df = pd.DataFrame(rows)[
-        ["rank", "hotspot_id", "risk_score", "peak_window", "police_station", "recommended_units"]
+        ["rank", "hotspot_id", "risk_score", "logging_window", "police_station", "recommended_units"]
     ]
-    df.columns = ["Rank", "Zone", "Risk Score", "Peak Window", "Station", "Units"]
+    df.columns = ["Rank", "Zone", "Risk Score", "Logging Window", "Station", "Units"]
 
     st.dataframe(
         df.style.background_gradient(subset=["Risk Score"], cmap="RdYlGn_r"),

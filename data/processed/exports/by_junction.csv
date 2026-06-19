@@ -1,15 +1,15 @@
-junction_name,hotspot_count,total_violations,avg_risk_score,max_risk_score,top_hotspot_id,police_station,dominant_violation
-BTP051 - Safina Plaza Junction,7,6918,45.96,52.93,HS-0077,Shivajinagar,WRONG PARKING
-BTP044 - Sagar Theatre Junction,3,5921,51.91,55.61,HS-0045,Upparpet,NO PARKING
-BTP040 - Elite Junction,1,5366,54.53,54.53,HS-0064,Upparpet,NO PARKING
-BTP082 - KR Market Junction,5,3809,50.59,55.23,HS-0052,City Market,WRONG PARKING
-BTP211 - Central Street Junction,6,2537,51.19,58.29,HS-0030,Shivajinagar,WRONG PARKING
-BTP027 - Modi Bridge Junction,2,2356,50.64,51.92,HS-0097,Malleshwaram,WRONG PARKING
-BTP057 - Anand Rao Junction,5,1928,46.02,55.89,HS-0042,Sheshadripuram,WRONG PARKING
-BTP020 - Hosahalli Metro Station,4,1855,39.38,49.1,HS-0166,Vijayanagara,WRONG PARKING
-BTP032 - Windsor Circle,6,1722,44.26,49.97,HS-0138,High ground,WRONG PARKING
-BTP058 - Subbanna Junction,3,1559,50.43,53.03,HS-0074,Upparpet,NO PARKING
-"BTP080 - NR Road, SP Road Junction",3,1432,48.99,52.51,HS-0088,Halasuru Gate,WRONG PARKING
+    junction_name,hotspot_count,total_violations,avg_risk_score,max_risk_score,top_hotspot_id,police_station,dominant_violation
+    BTP051 - Safina Plaza Junction,7,6918,45.96,52.93,HS-0077,Shivajinagar,WRONG PARKING
+    BTP044 - Sagar Theatre Junction,3,5921,51.91,55.61,HS-0045,Upparpet,NO PARKING
+    BTP040 - Elite Junction,1,5366,54.53,54.53,HS-0064,Upparpet,NO PARKING
+    BTP082 - KR Market Junction,5,3809,50.59,55.23,HS-0052,City Market,WRONG PARKING
+    BTP211 - Central Street Junction,6,2537,51.19,58.29,HS-0030,Shivajinagar,WRONG PARKING
+    BTP027 - Modi Bridge Junction,2,2356,50.64,51.92,HS-0097,Malleshwaram,WRONG PARKING
+    BTP057 - Anand Rao Junction,5,1928,46.02,55.89,HS-0042,Sheshadripuram,WRONG PARKING
+    BTP020 - Hosahalli Metro Station,4,1855,39.38,49.1,HS-0166,Vijayanagara,WRONG PARKING
+    BTP032 - Windsor Circle,6,1722,44.26,49.97,HS-0138,High ground,WRONG PARKING
+    BTP058 - Subbanna Junction,3,1559,50.43,53.03,HS-0074,Upparpet,NO PARKING
+    "BTP080 - NR Road, SP Road Junction",3,1432,48.99,52.51,HS-0088,Halasuru Gate,WRONG PARKING
 "BTP001 - 10th Cross, Dr. Rajkumar Road",4,1376,46.29,51.99,HS-0096,Malleshwaram,WRONG PARKING
 "BTP016 - 5th Main Road, RPC Layout",3,1337,48.79,53.32,HS-0071,Vijayanagara,WRONG PARKING
 BTP023 - Mahalaxmi Layout Entrance,5,1248,46.96,51.38,HS-0107,Malleshwaram,WRONG PARKING

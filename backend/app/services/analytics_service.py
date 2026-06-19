@@ -4,8 +4,8 @@ Stubs: each function raises NotImplementedError until real data is available.
 """
 from __future__ import annotations
 
-from app.core.config import settings
-from app.models.schemas import (
+from backend.app.core.config import settings
+from backend.app.models.schemas import (
     PriorityResponse, StatsResponse, ForecastResponse,
     PatrolResponse, RepeatOffendersResponse, EnforcementQualityResponse,
 )

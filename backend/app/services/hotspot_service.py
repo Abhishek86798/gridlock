@@ -5,8 +5,8 @@ Stub: replace NotImplementedError bodies once ML pipeline writes the parquets.
 from __future__ import annotations
 from typing import Optional
 
-from app.core.config import settings
-from app.models.schemas import HotspotsResponse, HeatmapResponse, TemporalResponse
+from backend.app.core.config import settings
+from backend.app.models.schemas import HotspotsResponse, HeatmapResponse, TemporalResponse
 
 
 def _load_hotspots_df():

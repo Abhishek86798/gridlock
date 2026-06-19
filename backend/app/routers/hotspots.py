@@ -1,56 +1,86 @@
-import json
-from pathlib import Path
-from fastapi import APIRouter
-from app.models.schemas import HotspotResponse, PriorityResponse, HeatmapResponse
+from __future__ import annotations
 
-router = APIRouter()
+from typing import Optional
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
-MOCKS_DIR = BASE_DIR / "mocks"
+import pandas as pd
+from fastapi import APIRouter, HTTPException, Query
 
-def load_mock(filename: str):
-    try:
-        with open(MOCKS_DIR / filename, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        return {}
+from backend.app.core import store
+from backend.app.models.schemas import (
+    HeatmapResponse,
+    HotspotsResponse,
+    PriorityResponse,
+)
 
-@router.get("/hotspots", response_model=HotspotResponse)
-def get_hotspots(start_date: str = None, end_date: str = None, police_station: str = None, vehicle_type: str = None, violation_type: str = None):
-    # Currently ignoring filters and returning mock data
-    data = load_mock("hotspots.sample.json")
-    return data
+router = APIRouter(tags=["hotspots"])
 
-@router.get("/priority", response_model=PriorityResponse)
-def get_priority():
-    data = load_mock("hotspots.sample.json")
-    # Transform hotspots to priority queue
-    hotspots = data.get("hotspots", [])
-    # Sort by risk score descending
-    hotspots.sort(key=lambda x: x["risk_score"], reverse=True)
-    
-    priority_items = []
-    for idx, hs in enumerate(hotspots):
-        priority_items.append({
-            "rank": idx + 1,
-            "hotspot_id": hs["hotspot_id"],
-            "risk_score": hs["risk_score"],
-            "peak_window": hs["peak_window"],
-            "police_station": hs["police_station"],
-            "recommended_units": max(1, int(hs["risk_score"] // 30))
-        })
-    return {"priority": priority_items}
+
+def _to_records(df: pd.DataFrame) -> list[dict]:
+    """Convert DataFrame to records, replacing NaN with None for JSON safety."""
+    return df.where(pd.notna(df), other=None).to_dict(orient="records")
+
+
+def _apply_hotspot_filters(
+    df: pd.DataFrame,
+    police_station: Optional[str],
+    violation_type: Optional[str],
+    min_risk: float,
+) -> pd.DataFrame:
+    if police_station:
+        df = df[df["police_station"] == police_station]
+    if violation_type:
+        df = df[df["dominant_violation"].str.contains(violation_type, case=False, na=False)]
+    if min_risk > 0:
+        df = df[df["risk_score"] >= min_risk]
+    return df
+
+
+@router.get("/hotspots", response_model=HotspotsResponse)
+def get_hotspots(
+    police_station: Optional[str] = Query(None, description="Filter by police station name"),
+    violation_type: Optional[str] = Query(None, description="Filter by dominant violation type (partial match)"),
+    min_risk: float = Query(0.0, ge=0, le=100, description="Minimum risk score threshold"),
+    limit: int = Query(500, ge=1, le=1200, description="Maximum hotspots to return"),
+):
+    df = _apply_hotspot_filters(store.hotspots, police_station, violation_type, min_risk)
+    df = df.head(limit)
+    return HotspotsResponse(count=len(df), hotspots=_to_records(df))
+
 
 @router.get("/heatmap", response_model=HeatmapResponse)
-def get_heatmap():
-    data = load_mock("hotspots.sample.json")
-    hotspots = data.get("hotspots", [])
-    
-    points = []
-    for hs in hotspots:
-        points.append({
-            "lat": hs["lat"],
-            "lng": hs["lng"],
-            "weight": hs["risk_score"] / 100.0
-        })
-    return {"points": points}
+def get_heatmap(
+    police_station: Optional[str] = Query(None),
+    violation_type: Optional[str] = Query(None),
+    min_risk: float = Query(0.0, ge=0, le=100),
+):
+    df = _apply_hotspot_filters(store.hotspots, police_station, violation_type, min_risk)
+    max_score = float(df["risk_score"].max()) if len(df) else 1.0
+    points = [
+        {"lat": row["lat"], "lng": row["lng"], "weight": row["risk_score"] / max_score}
+        for _, row in df.iterrows()
+    ]
+    return HeatmapResponse(points=points)
+
+
+@router.get("/priority", response_model=PriorityResponse)
+def get_priority(
+    police_station: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+):
+    df = store.hotspots.copy()
+    if police_station:
+        df = df[df["police_station"] == police_station]
+    df = df.sort_values("risk_score", ascending=False).head(limit).reset_index(drop=True)
+
+    items = [
+        {
+            "rank": i + 1,
+            "hotspot_id": row["hotspot_id"],
+            "risk_score": row["risk_score"],
+            "logging_window": row["logging_window"],
+            "police_station": row["police_station"],
+            "recommended_units": max(1, int(row["risk_score"] // 30)),
+        }
+        for i, (_, row) in enumerate(df.iterrows())
+    ]
+    return PriorityResponse(priority=items)
