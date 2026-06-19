@@ -19,16 +19,16 @@ def _load(name: str):
 def get_priority(**filters) -> PriorityResponse:
     df = _load("hotspots").sort_values("risk_score", ascending=False).reset_index(drop=True)
 
-    # Percentile-based unit recommendation (same logic as hotspots router)
+    # Percentile-based priority tier (same logic as hotspots router)
     p90 = float(df["risk_score"].quantile(0.90))
     p99 = float(df["risk_score"].quantile(0.99))
 
-    def _units(score: float) -> int:
+    def _tier(score: float) -> str:
         if score >= p99:
-            return 3
+            return "Critical"
         if score >= p90:
-            return 2
-        return 1
+            return "Elevated"
+        return "Standard"
 
     items = []
     for rank, (_, row) in enumerate(df.iterrows(), start=1):
@@ -38,7 +38,7 @@ def get_priority(**filters) -> PriorityResponse:
             "risk_score": row["risk_score"],
             "logging_window": row["logging_window"],
             "police_station": row["police_station"],
-            "recommended_units": _units(float(row["risk_score"])),
+            "priority_tier": _tier(float(row["risk_score"])),
         })
     return PriorityResponse(priority=items)
 

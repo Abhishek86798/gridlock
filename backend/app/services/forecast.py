@@ -358,21 +358,23 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     next_yr = ctx["next_yr"]
     next_wk = ctx["next_wk"]
 
-    # For each hotspot, build one inference row from its 4 most recent weeks.
-    last4 = (
+    # For each hotspot, build one inference row from its 8 most recent weeks to calculate baseline.
+    # The model still only uses lag1..lag4 as features.
+    last8 = (
         panel
         .sort_values("week_ord")
         .groupby("hotspot_id", sort=False)
-        .tail(_LAG_WEEKS)
+        .tail(8)
     )
 
     def _inference_row(grp: pd.DataFrame) -> dict:
         grp    = grp.sort_values("week_ord")
         counts = grp["count"].values
-        # Pad with zeros at the front if hotspot has < 4 observed weeks.
-        counts = np.pad(counts, (max(0, _LAG_WEEKS - len(counts)), 0))[-_LAG_WEEKS:]
-        # counts is oldest→newest; lag1 = most recent, lag4 = oldest.
-        lag1, lag2, lag3, lag4 = counts[3], counts[2], counts[1], counts[0]
+        # Pad with zeros to exactly 8 weeks
+        counts = np.pad(counts, (max(0, 8 - len(counts)), 0))[-8:]
+        # XGBoost features need the last 4 weeks (lag1..lag4).
+        counts4 = counts[-4:]
+        lag1, lag2, lag3, lag4 = counts4[3], counts4[2], counts4[1], counts4[0]
         latest = grp.iloc[-1]
         return {
             "hotspot_id":         latest["hotspot_id"],
@@ -382,16 +384,16 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
             "lag2":               float(lag2),
             "lag3":               float(lag3),
             "lag4":               float(lag4),
-            "rolling_mean_4w":    float(counts.mean()),
+            "rolling_mean_4w":    float(counts4.mean()),
             "month":              _month_from_iso(next_yr, next_wk),
             "violation_severity": float(latest["violation_severity"]),
             "has_junction":       float(latest["has_junction"]),
             "has_poi":            float(latest["has_poi"]),
-            "prev_week_count":    int(lag1),
+            "baseline_count":     int(counts.mean()),
         }
 
     inf = pd.DataFrame([
-        _inference_row(g) for _, g in last4.groupby("hotspot_id", sort=False)
+        _inference_row(g) for _, g in last8.groupby("hotspot_id", sort=False)
     ])
 
     # XGBoost prediction — kept for comparison but NOT the headline number
@@ -402,13 +404,13 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     # Primary prediction: 4-week rolling mean (MAE 1.30 vs XGBoost 4.63)
     inf["predicted_count"] = inf["rolling_mean_4w"].clip(lower=0).round(1)
 
-    # Use max(prev, 1) to avoid absurd % when prev_week_count is 0
+    # Use max(prev, 1) to avoid absurd % when baseline_count is 0
     inf["change_pct"] = (
-        (inf["predicted_count"] - inf["prev_week_count"])
-        / inf["prev_week_count"].clip(lower=1).astype(float)
+        (inf["predicted_count"] - inf["baseline_count"])
+        / inf["baseline_count"].clip(lower=1).astype(float)
         * 100
     ).round(1)
-    inf["count_delta"] = (inf["predicted_count"] - inf["prev_week_count"]).round(0).astype(int)
+    inf["count_delta"] = (inf["predicted_count"] - inf["baseline_count"]).round(0).astype(int)
 
     top = inf.nlargest(top_n, "predicted_count").reset_index(drop=True)
 
@@ -418,7 +420,7 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
 
     def _build_item(row):
         predicted = round(float(row["predicted_count"]), 1)
-        prev = int(row["prev_week_count"])
+        prev = int(row["baseline_count"])
         delta = int(row["count_delta"])
 
         # If baseline is too low, percentage is meaningless
@@ -427,7 +429,7 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
                 "hotspot_id":      row["hotspot_id"],
                 "police_station":  row["police_station"],
                 "predicted_count": predicted,
-                "prev_week_count": prev,
+                "baseline_count":  prev,
                 "change_pct":      None,
                 "count_delta":     delta,
                 "trend_label":     "emerging" if predicted > 5 else "insufficient history",
@@ -450,7 +452,7 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
             "hotspot_id":      row["hotspot_id"],
             "police_station":  row["police_station"],
             "predicted_count": predicted,
-            "prev_week_count": prev,
+            "baseline_count":  prev,
             "change_pct":      round(pct, 1),
             "count_delta":     delta,
             "trend_label":     label,

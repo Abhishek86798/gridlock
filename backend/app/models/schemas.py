@@ -35,7 +35,7 @@ class PriorityItem(BaseModel):
     risk_score: float
     logging_window: str
     police_station: str
-    recommended_units: int
+    priority_tier: str
 
 
 class PriorityResponse(BaseModel):
@@ -105,9 +105,9 @@ class ForecastItem(BaseModel):
     hotspot_id: str
     police_station: str
     predicted_count: float   # 4-week rolling mean forecast for next ISO week
-    prev_week_count: int     # actual count last observed week
-    change_pct: Optional[float] = None   # % change vs last week (null if insufficient baseline)
-    count_delta: Optional[int] = None    # raw predicted - prev_week_count
+    baseline_count: int      # 8-week historical average for stable trend comparison
+    change_pct: Optional[float] = None   # % change vs baseline (null if insufficient baseline)
+    count_delta: Optional[int] = None    # raw predicted - baseline_count
     trend_label: Optional[str] = None    # "emerging" / "rising" / "stable" / "declining"
     risk_score: float        # static risk score for display / sorting
 
