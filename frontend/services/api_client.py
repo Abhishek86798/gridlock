@@ -114,6 +114,15 @@ def get_poi_stats() -> dict:
     return _get("/poi-stats") or {"tagged_hotspots": 0, "untagged_hotspots": 0, "by_category": []}
 
 
+@st.cache_data(ttl=_CACHE_TTL, show_spinner=False)
+def get_patrol(units: int = 10) -> dict:
+    """
+    Fetch Patrol Deployment Optimizer results.
+    Returns {units, coverage_pct, assignments: [...], coverage_curve: [...]} or {} on failure.
+    """
+    return _get("/patrol", {"units": units}) or {"units": units, "coverage_pct": 0.0, "assignments": [], "coverage_curve": []}
+
+
 @st.cache_data(ttl=5, show_spinner=False)
 def health() -> bool:
     try:

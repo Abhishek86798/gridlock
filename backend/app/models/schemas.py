@@ -111,8 +111,15 @@ class ForecastItem(BaseModel):
 
 
 class ForecastResponse(BaseModel):
-    predict_week: str        # ISO label e.g. "2024-W22"
-    model_mae: float         # mean-absolute-error on 2-week hold-out
+    predict_week: str                        # ISO label e.g. "2024-W22"
+    model_mae: float                         # XGBoost MAE on 2-week hold-out
+    baseline_mae_last_week: float            # naive baseline: predict = last week's count
+    baseline_mae_rolling_mean: float         # naive baseline: predict = 4-week rolling mean
+    pct_beat_last_week: Optional[float]      # % MAE reduction vs last-week naive (positive = better)
+    pct_beat_rolling_mean: Optional[float]   # % MAE reduction vs rolling-mean naive
+    precision_at: dict[int, float]           # {10: 0.7, 20: 0.65} — top-N overlap on hold-out
+    weekly_totals: list[dict]                # [{week, total_violations}] for ramp diagnosis
+    data_quality_note: str                   # plain-English enforcement-ramp / gap assessment
     forecast: list[ForecastItem]
 
 
@@ -124,10 +131,16 @@ class PatrolAssignment(BaseModel):
     time_window: str
 
 
+class CoverageCurvePoint(BaseModel):
+    units: int
+    coverage_pct: float
+
+
 class PatrolResponse(BaseModel):
     units: int
     coverage_pct: float
     assignments: list[PatrolAssignment]
+    coverage_curve: list[CoverageCurvePoint] = []
 
 
 # ── Add-on: Repeat offenders ──────────────────────────────────────────────────

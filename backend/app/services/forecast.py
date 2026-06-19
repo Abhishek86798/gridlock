@@ -6,10 +6,19 @@ Model   : XGBoost with count:poisson objective.
 Panel   : violations.parquet → weekly counts per hotspot (via H3 cell lookup),
           zero-filled for every week in the dataset range.
 Features: lag1–lag4 weekly counts, 4-week rolling mean,
-          ISO week-of-year + calendar month (seasonality),
+          calendar month (seasonality),
           static hotspot attributes: risk_score, violation_severity,
           has_junction, has_poi.
+          NOTE: week_of_year intentionally excluded — the dataset spans only
+          ~20 weeks (Nov 2023 – Mar 2024), so holdout weeks 12-13 never
+          appear in training and the model would extrapolate on that feature.
+          month is kept because all months in the dataset appear in training.
+Data    : Two enforcement drives separated by a near-zero gap (W06-W10).
+          Weekly totals are NOT a smooth ramp — they reflect reporting effort,
+          not monotonic demand growth. Caveat surfaces in data_quality_notes.
 Split   : time-based — train on all-but-last-2 weeks, hold out final 2 weeks.
+Eval    : MAE vs two naive baselines (last-week, rolling-mean-4w) + Precision@N
+          (overlap between predicted top-N and actual top-N on the hold-out).
 Predict : one ISO week beyond the last observed week.
 Cache   : model trained once per server process (lazy singleton, _cache).
 """
@@ -41,7 +50,7 @@ _SEVERITY_MAP: dict[str, float] = {
 _FEATURE_COLS: list[str] = [
     "lag1", "lag2", "lag3", "lag4",
     "rolling_mean_4w",
-    "week_of_year", "month",
+    "month",          # week_of_year dropped: holdout weeks 12-13 unseen in training
     "risk_score", "violation_severity",
     "has_junction", "has_poi",
 ]
@@ -55,6 +64,75 @@ _cache: dict[str, Any] | None = None
 
 def _iso_label(year: int, week: int) -> str:
     return f"{year}-W{week:02d}"
+
+
+def _compute_weekly_totals(vdf: pd.DataFrame) -> list[dict]:
+    """
+    Return total violation count per ISO week across all hotspots.
+    Used to check for enforcement-effort ramps vs. stable demand.
+    """
+    ts = pd.to_datetime(vdf["created_ist"])
+    if ts.dt.tz is not None:
+        from zoneinfo import ZoneInfo
+        ts = ts.dt.tz_convert(ZoneInfo("Asia/Kolkata")).dt.tz_localize(None)
+    iso = ts.dt.isocalendar()
+    week_ord = (iso["year"].astype(int) * 100 + iso["week"].astype(int)).values
+    weekly = (
+        pd.Series(week_ord, name="week_ord")
+        .value_counts()
+        .sort_index()
+        .reset_index()
+    )
+    weekly.columns = ["week_ord", "total_violations"]
+    weekly["week_label"] = weekly["week_ord"].apply(
+        lambda w: _iso_label(w // 100, w % 100)
+    )
+    return [
+        {"week": r["week_label"], "total_violations": int(r["total_violations"])}
+        for _, r in weekly.iterrows()
+    ]
+
+
+def _enforcement_ramp_note(weekly_totals: list[dict]) -> str:
+    """
+    Inspect weekly totals and return a plain-English note about the trend.
+
+    This dataset has two enforcement drives separated by a reporting gap
+    (W06-W10 ≈ near-zero counts). We surface that fact rather than
+    calling it a "ramp" or "stable demand."
+    """
+    counts = [w["total_violations"] for w in weekly_totals]
+    if len(counts) < 4:
+        return "Too few weeks to assess enforcement trend."
+
+    # Detect gap weeks (< 5% of the median count — reporting dropout, not demand)
+    median = float(pd.Series(counts).median())
+    gap_threshold = max(median * 0.05, 50)
+    gap_weeks = [w["week"] for w, c in zip(weekly_totals, counts) if c < gap_threshold]
+
+    first3_avg = sum(counts[:3]) / 3
+    last3_avg  = sum(counts[-3:]) / 3
+    ratio      = last3_avg / first3_avg if first3_avg > 0 else 0.0
+
+    if gap_weeks:
+        return (
+            f"Data contains reporting gaps (near-zero counts in {', '.join(gap_weeks)}), "
+            f"likely reflecting enforcement-drive start/stop rather than smooth demand. "
+            f"Weekly totals are NOT a monotonic ramp — they reflect reporting effort. "
+            f"Forecast lags trained across the gap may be noisy; treat predictions with caution."
+        )
+    elif ratio > 1.5:
+        return (
+            f"Weekly totals show an upward trend (first-3-week avg {first3_avg:.0f} → "
+            f"last-3-week avg {last3_avg:.0f}, {ratio:.1f}x). Model may partly be "
+            f"forecasting reporting effort rather than pure parking demand."
+        )
+    else:
+        return (
+            f"Weekly totals are broadly flat (first-3-week avg {first3_avg:.0f}, "
+            f"last-3-week avg {last3_avg:.0f}, ratio {ratio:.2f}x). "
+            f"No evidence of an enforcement-effort ramp — model targets stable demand signal."
+        )
 
 
 def _month_from_iso(year: int, week: int) -> int:
@@ -71,7 +149,7 @@ def _assign_hotspot_ids(vdf: pd.DataFrame, hdf: pd.DataFrame) -> pd.DataFrame:
     res = settings.h3_resolution
     good = vdf.dropna(subset=["latitude", "longitude"]).copy()
     good["_hex"] = [
-        h3.geo_to_h3(lat, lng, res)
+        h3.latlng_to_cell(lat, lng, res)
         for lat, lng in zip(good["latitude"], good["longitude"])
     ]
     hex_to_hs = hdf.set_index("hex_id")["hotspot_id"]
@@ -168,10 +246,12 @@ def _add_lag_features(panel: pd.DataFrame) -> pd.DataFrame:
 def _fit(vdf: pd.DataFrame, hdf: pd.DataFrame) -> dict[str, Any]:
     """
     Build panel, split by time (hold out last 2 weeks), train XGBRegressor
-    with Poisson objective, evaluate MAE on hold-out.
-
-    Returns a dict with keys: model, panel, mae, predict_week, next_yr, next_wk.
+    with Poisson objective, evaluate MAE + baselines + Precision@N on hold-out.
+    Also computes weekly totals and enforcement-ramp diagnosis for the API response.
     """
+    weekly_totals     = _compute_weekly_totals(vdf)
+    data_quality_note = _enforcement_ramp_note(weekly_totals)
+
     panel = _build_weekly_panel(vdf, hdf)
     panel = _add_lag_features(panel)
 
@@ -205,10 +285,32 @@ def _fit(vdf: pd.DataFrame, hdf: pd.DataFrame) -> dict[str, Any]:
     )
     model.fit(X_tr, y_tr)
 
-    mae = (
-        float(np.abs(model.predict(X_ho) - y_ho.values).mean())
-        if len(y_ho) else 0.0
-    )
+    if len(y_ho) == 0:
+        mae = mae_naive_last = mae_naive_roll = 0.0
+        precision_at = {}
+    else:
+        y_pred  = model.predict(X_ho)
+        y_true  = y_ho.values
+
+        mae              = float(np.abs(y_pred - y_true).mean())
+        mae_naive_last   = float(np.abs(holdout["lag1"].fillna(0).values - y_true).mean())
+        mae_naive_roll   = float(np.abs(holdout["rolling_mean_4w"].fillna(0).values - y_true).mean())
+
+        # Precision@N: fraction of actual top-N hotspots that appear in predicted top-N.
+        # Computed on the *most recent* holdout week only (the last week in holdout),
+        # so ranking is meaningful (single point-in-time snapshot).
+        last_ho_ord = holdout["week_ord"].max()
+        snap = holdout[holdout["week_ord"] == last_ho_ord].copy()
+        snap["_pred"] = model.predict(snap[_FEATURE_COLS].fillna(0))
+
+        precision_at: dict[int, float] = {}
+        for n in (10, 20):
+            actual_top  = set(snap.nlargest(n, "count")["hotspot_id"])
+            predict_top = set(snap.nlargest(n, "_pred")["hotspot_id"])
+            overlap     = len(actual_top & predict_top)
+            # Only report if there are at least n hotspots in the snapshot
+            if len(snap) >= n:
+                precision_at[n] = round(overlap / n, 3)
 
     # Determine the ISO week immediately after the last observed week.
     last_yr, last_wk = all_ords[-1] // 100, all_ords[-1] % 100
@@ -220,12 +322,17 @@ def _fit(vdf: pd.DataFrame, hdf: pd.DataFrame) -> dict[str, Any]:
     next_yr, next_wk = int(ni[0]), int(ni[1])
 
     return {
-        "model":        model,
-        "panel":        panel,
-        "mae":          mae,
-        "predict_week": _iso_label(next_yr, next_wk),
-        "next_yr":      next_yr,
-        "next_wk":      next_wk,
+        "model":              model,
+        "panel":              panel,
+        "mae":                mae,
+        "mae_naive_last":     mae_naive_last,
+        "mae_naive_roll":     mae_naive_roll,
+        "precision_at":       precision_at,
+        "weekly_totals":      weekly_totals,
+        "data_quality_note":  data_quality_note,
+        "predict_week":       _iso_label(next_yr, next_wk),
+        "next_yr":            next_yr,
+        "next_wk":            next_wk,
     }
 
 
@@ -276,7 +383,6 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
             "lag3":               float(lag3),
             "lag4":               float(lag4),
             "rolling_mean_4w":    float(counts.mean()),
-            "week_of_year":       next_wk,
             "month":              _month_from_iso(next_yr, next_wk),
             "violation_severity": float(latest["violation_severity"]),
             "has_junction":       float(latest["has_junction"]),
@@ -293,15 +399,31 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     )
     inf["change_pct"] = (
         (inf["predicted_count"] - inf["prev_week_count"])
-        / (inf["prev_week_count"] + 1e-9)
+        / (inf["prev_week_count"].astype(float) + 1e-9)
         * 100
     ).round(1)
 
     top = inf.nlargest(top_n, "predicted_count").reset_index(drop=True)
 
+    mae       = ctx["mae"]
+    mae_last  = ctx["mae_naive_last"]
+    mae_roll  = ctx["mae_naive_roll"]
+
+    def _pct_beat(baseline: float) -> float | None:
+        if baseline == 0.0:
+            return None
+        return round((baseline - mae) / baseline * 100, 1)
+
     return {
-        "predict_week": ctx["predict_week"],
-        "model_mae":    round(ctx["mae"], 2),
+        "predict_week":              ctx["predict_week"],
+        "model_mae":                 round(mae, 2),
+        "baseline_mae_last_week":    round(mae_last, 2),
+        "baseline_mae_rolling_mean": round(mae_roll, 2),
+        "pct_beat_last_week":        _pct_beat(mae_last),
+        "pct_beat_rolling_mean":     _pct_beat(mae_roll),
+        "precision_at":              ctx["precision_at"],
+        "weekly_totals":             ctx["weekly_totals"],
+        "data_quality_note":         ctx["data_quality_note"],
         "forecast": [
             {
                 "hotspot_id":      row["hotspot_id"],

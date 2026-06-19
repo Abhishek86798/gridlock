@@ -119,7 +119,7 @@ def compute_hotspots(
     # Assign each violation to an H3 cell.
     df = df.copy()
     df["hex_id"] = [
-        h3.geo_to_h3(lat, lng, res)
+        h3.latlng_to_cell(lat, lng, res)
         for lat, lng in zip(df["latitude"], df["longitude"])
     ]
 
@@ -129,7 +129,7 @@ def compute_hotspots(
             continue
 
         # Centroid from H3 (not arithmetic mean — avoids camera-stack bias).
-        clat, clng = h3.h3_to_geo(hex_id)
+        clat, clng = h3.cell_to_latlng(hex_id)
 
         # Risk score inputs (density + final score applied after the loop).
         sev_agg  = float(grp["severity_score"].mean())

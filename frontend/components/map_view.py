@@ -17,25 +17,47 @@ def render(filters: dict):
 
     m = folium.Map(location=[12.9716, 77.5946], zoom_start=12, tiles="CartoDB positron")
 
+    patrol_units = filters.get("patrol_units", 0)
+    assigned_hs_ids = set()
+    if patrol_units > 0:
+        patrol_data = api_client.get_patrol(units=patrol_units)
+        assignments = patrol_data.get("assignments", [])
+        assigned_hs_ids = {a["hotspot_id"] for a in assignments}
+
     for hs in hotspots:
+        hs_id = hs["hotspot_id"]
+        is_assigned = hs_id in assigned_hs_ids
+        
         radius = max(5, hs["risk_score"] / 8)
-        color  = _risk_color(hs["risk_score"])
+        if is_assigned:
+            color = "#000000"  # Black or dark for patrol car
+            fill_color = "#32cd32" # Lime green fill
+            radius += 2
+        else:
+            color = _risk_color(hs["risk_score"])
+            fill_color = color
+            
         popup  = (
-            f"<b>{hs['hotspot_id']}</b><br>"
+            f"<b>{hs_id}</b><br>"
             f"Risk: {hs['risk_score']:.1f}<br>"
             f"Violations: {hs['violation_count']}<br>"
             f"Logging: {hs['logging_window']} "
             f"(AM {hs['morning_log_pct']:.0f}% / PM {hs['afternoon_log_pct']:.0f}%)<br>"
             f"Station: {hs['police_station']}"
         )
+        if is_assigned:
+            popup += "<br><b>🚓 Patrol Assigned</b>"
+
         folium.CircleMarker(
             location=[hs["lat"], hs["lng"]],
             radius=radius,
             color=color,
             fill=True,
-            fill_opacity=0.7,
+            fill_color=fill_color,
+            fill_opacity=0.9 if is_assigned else 0.7,
+            weight=3 if is_assigned else 1,
             popup=folium.Popup(popup, max_width=240),
-            tooltip=hs.get("junction_name") or hs["hotspot_id"],
+            tooltip=(hs.get("junction_name") or hs_id) + (" 🚓" if is_assigned else ""),
         ).add_to(m)
 
     st_folium(m, width="100%", height=520, returned_objects=[])

@@ -6,8 +6,9 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.app.core import store
-from backend.app.models.schemas import ForecastResponse, PoiStatsResponse, StatsResponse, TemporalResponse
+from backend.app.models.schemas import ForecastResponse, PoiStatsResponse, StatsResponse, TemporalResponse, PatrolResponse
 from backend.app.services import forecast as forecast_service
+from backend.app.services import patrol_optimizer
 
 router = APIRouter(tags=["analytics"])
 
@@ -98,6 +99,20 @@ def get_forecast(
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(500, f"Forecast model error: {exc}") from exc
     return result
+
+
+@router.get("/patrol", response_model=PatrolResponse)
+def get_patrol(
+    units: int = Query(10, ge=1, le=100, description="Number of patrol units to deploy"),
+):
+    """
+    Patrol Deployment Optimizer.
+    Assign N patrol units to maximize high-priority coverage using greedy
+    spatial de-bunching.
+    """
+    if store.hotspots.empty:
+        raise HTTPException(503, "Artifacts not loaded yet")
+    return patrol_optimizer.optimize_patrol(units=units)
 
 
 @router.get("/poi-stats", response_model=PoiStatsResponse)

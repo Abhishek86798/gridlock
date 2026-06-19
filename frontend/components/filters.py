@@ -45,6 +45,19 @@ def render() -> dict:
         )
 
         st.divider()
+        st.subheader("Patrol Deployment")
+        patrol_units = st.slider(
+            "Units to Deploy", min_value=0, max_value=100, value=0, step=1,
+            help="Assign N patrol units to maximize high-priority coverage. Shows assignments on map.",
+            key="patrol_units"
+        )
+        if patrol_units > 0:
+            # We can fetch patrol_data here to show the coverage stat right under the slider!
+            patrol_data = api_client.get_patrol(units=patrol_units)
+            cov_pct = patrol_data.get("coverage_pct", 0.0)
+            st.caption(f"🚓 **{patrol_units} units** cover **{cov_pct:.1f}%** of priority risk.")
+
+        st.divider()
         dr = stats.get("date_range", {})
         if dr:
             st.caption(f"Dataset period: {dr.get('start', '?')} → {dr.get('end', '?')}")
@@ -58,4 +71,6 @@ def render() -> dict:
         filters["violation_type"] = violation_type
     if min_risk:
         filters["min_risk"] = float(min_risk)
+    if patrol_units > 0:
+        filters["patrol_units"] = patrol_units
     return filters

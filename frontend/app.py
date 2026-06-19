@@ -122,9 +122,9 @@ with col_table:
 
 st.markdown("---")
 
-# ── Tabs: Forecast | POI Spillover | Temporal | Stations | Junctions ──────────
-tab_forecast, tab_poi, tab_temporal, tab_stations, tab_junctions = st.tabs(
-    ["🔮 Tomorrow's Hotspots", "🏙️ POI Spillover", "Temporal Heatmap", "By Police Station", "By Junction"]
+# ── Tabs: Forecast | Patrol Deployment | POI Spillover | Temporal | Stations | Junctions ──────────
+tab_forecast, tab_patrol, tab_poi, tab_temporal, tab_stations, tab_junctions = st.tabs(
+    ["🔮 Tomorrow's Hotspots", "🚓 Patrol Deployment", "🏙️ POI Spillover", "Temporal Heatmap", "By Police Station", "By Junction"]
 )
 
 with tab_forecast:
@@ -198,6 +198,46 @@ with tab_forecast:
             top10.set_index("Hotspot")[["Predicted Count", "Last Week"]],
             use_container_width=True,
         )
+
+with tab_patrol:
+    st.write("### 🚓 Patrol Deployment Optimizer")
+    st.write(
+        "Assign N patrol units to maximize high-priority coverage. "
+        "Uses greedy spatial de-bunching to prevent units from overlapping "
+        "within 1km of each other."
+    )
+    
+    units_to_deploy = active_filters.get("patrol_units", 0)
+    if units_to_deploy == 0:
+        st.info("👈 Use the **Patrol Deployment** slider in the sidebar to assign units and view the coverage curve.")
+    else:
+        patrol_data = api_client.get_patrol(units=units_to_deploy)
+        if not patrol_data or not patrol_data.get("assignments"):
+            st.warning("Patrol data not available. Ensure backend is running.")
+        else:
+            p_units = patrol_data.get("units", units_to_deploy)
+        cov_pct = patrol_data.get("coverage_pct", 0.0)
+        assignments = patrol_data.get("assignments", [])
+        coverage_curve = patrol_data.get("coverage_curve", [])
+        
+        c1, c2 = st.columns(2)
+        c1.metric("Units Assigned", len(assignments))
+        c2.metric("Priority Coverage", f"{cov_pct:.1f}%")
+        
+        if coverage_curve:
+            df_curve = pd.DataFrame(coverage_curve)
+            st.write("**Coverage vs. Units Deployed**")
+            st.line_chart(df_curve.set_index("units")["coverage_pct"], use_container_width=True)
+
+        df_patrol = pd.DataFrame(assignments)
+        if not df_patrol.empty:
+            df_patrol = df_patrol.rename(columns={
+                "unit_id": "Unit ID",
+                "hotspot_id": "Hotspot ID",
+                "time_window": "Time Window"
+            })
+            st.write("**Deployment Roster**")
+            st.dataframe(df_patrol, use_container_width=True, hide_index=True)
 
 with tab_poi:
     _poi = api_client.get_poi_stats()

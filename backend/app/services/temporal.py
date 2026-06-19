@@ -104,8 +104,8 @@ def compute_temporal(
 
     # Assign each violation to a hotspot via its H3 cell.
     viol = violations.copy()
-    viol["hex_id"]     = [
-        h3.geo_to_h3(lat, lng, res)
+    viol["hex_id"] = [
+        h3.latlng_to_cell(lat, lng, res)
         for lat, lng in zip(viol["latitude"], viol["longitude"])
     ]
     viol["hotspot_id"] = viol["hex_id"].map(hex_to_hs)

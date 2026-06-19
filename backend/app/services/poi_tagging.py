@@ -202,24 +202,17 @@ def tag_hotspots(
         .reset_index()
     )  # columns: hex_id, poi_category, near_poi
 
-    # Merge onto hotspots, overwriting the None placeholder.
+    # Merge onto hotspots, overwriting any stale poi columns.
     out = hotspots.copy()
-    # Drop existing poi/near columns if already present from a stale run.
-    for col in ("poi_category", "near_poi"):
-        if col in out.columns and col != "near_poi":
-            out = out.drop(columns=[col])
+    stale = [c for c in ("poi_category", "near_poi") if c in out.columns]
+    if stale:
+        out = out.drop(columns=stale)
 
     out = out.merge(
         hex_tags[["hex_id", "poi_category", "near_poi"]],
         on="hex_id",
         how="left",
-        suffixes=("_old", ""),
     )
-
-    # If merge created *_old duplicates (near_poi already existed), clean up.
-    for col in list(out.columns):
-        if col.endswith("_old"):
-            out = out.drop(columns=[col])
 
     return out
 
