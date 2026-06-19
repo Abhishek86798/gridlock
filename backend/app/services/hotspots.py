@@ -30,6 +30,7 @@ import h3
 import pandas as pd
 
 from backend.app.core.config import settings
+from backend.app.services.poi_tagging import tag_hotspots as _tag_hotspots
 from backend.app.services.risk_score import compute_risk_scores
 
 
@@ -155,13 +156,17 @@ def compute_hotspots(
             "dominant_vehicle":    _mode_str(grp["vehicle_type"]),
             "police_station":      _mode_str(grp["police_station"]),
             "junction_name":       _top_junction(grp),
-            "near_poi":            None,   # FR-7: enrichment step
+            "near_poi":            None,   # filled by tag_hotspots() below
         })
 
     hotspots = pd.DataFrame(rows)
 
     # Density + risk score via the documented formula in risk_score.py.
     hotspots = compute_risk_scores(hotspots)
+
+    # POI / spillover tagging — keyword-match location text per hexcell.
+    # `df` still carries the hex_id column assigned earlier in this function.
+    hotspots = _tag_hotspots(df, hotspots)
 
     # Rank descending by risk_score, assign stable string IDs.
     hotspots = (

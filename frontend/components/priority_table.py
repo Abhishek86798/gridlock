@@ -8,6 +8,7 @@ def render(filters: dict):
     st.subheader("Enforcement Priority Queue")
     data = api_client.get_priority(
         police_station=filters.get("police_station"),
+        vehicle_type=filters.get("vehicle_type"),
     )
     rows = data.get("priority", [])
     if not rows:

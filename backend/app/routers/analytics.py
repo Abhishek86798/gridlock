@@ -6,7 +6,8 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.app.core import store
-from backend.app.models.schemas import StatsResponse, TemporalResponse
+from backend.app.models.schemas import ForecastResponse, PoiStatsResponse, StatsResponse, TemporalResponse
+from backend.app.services import forecast as forecast_service
 
 router = APIRouter(tags=["analytics"])
 
@@ -72,3 +73,82 @@ def get_junctions(
         df = df[df["total_violations"] >= min_violations]
     df = df.head(limit)
     return {"count": len(df), "junctions": _to_records(df)}
+
+
+@router.get("/forecast", response_model=ForecastResponse)
+def get_forecast(
+    top_n: int = Query(20, ge=1, le=100, description="Top-N hotspots to return ranked by predicted count"),
+):
+    """
+    Predictive hotspot forecast — next ISO week.
+
+    Returns the top_n hotspots with the highest predicted violation count
+    for the coming week, powered by an XGBoost count:poisson model trained
+    on lag / rolling-mean / seasonality features.
+
+    The model trains once at first request and is cached for the server lifetime.
+    Also surfaces `change_pct` (% change vs last week) to flag rising hotspots.
+    """
+    if store.violations.empty or store.hotspots.empty:
+        raise HTTPException(503, "Artifacts not loaded yet")
+    try:
+        result = forecast_service.get_forecast(top_n=top_n)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Forecast model error: {exc}") from exc
+    return result
+
+
+@router.get("/poi-stats", response_model=PoiStatsResponse)
+def get_poi_stats():
+    """
+    POI / spillover category breakdown across all hotspots.
+
+    Returns per-category counts, total violations, and avg risk score.
+    Surfaces the story: "X% of hotspots are within metro / commercial zones."
+    Requires hotspots.parquet to have been precomputed with the poi_tagging step.
+    """
+    hdf = store.hotspots
+    if hdf.empty:
+        raise HTTPException(503, "Artifacts not loaded yet")
+    if "poi_category" not in hdf.columns:
+        raise HTTPException(501, "POI tags not present — re-run: "
+                            "python -m backend.pipeline.precompute --steps hotspots")
+
+    total = len(hdf)
+    tagged_mask = hdf["poi_category"].notna()
+    tagged = int(tagged_mask.sum())
+
+    rows: list[dict] = []
+    for cat in ("sensitive", "metro", "commercial", "transit"):
+        sub = hdf[hdf["poi_category"] == cat]
+        if sub.empty:
+            continue
+
+        # join violations to get total violation count per category
+        hs_ids = set(sub["hotspot_id"])
+        vdf = store.violations
+        viol_count = 0
+        if not vdf.empty and "hex_id" in hdf.columns:
+            # cheap: sum violation_count from hotspot rows (already aggregated)
+            viol_count = int(sub["violation_count"].sum())
+        else:
+            viol_count = int(sub["violation_count"].sum())
+
+        rows.append({
+            "poi_category":    cat,
+            "hotspot_count":   int(len(sub)),
+            "total_violations": viol_count,
+            "avg_risk_score":  round(float(sub["risk_score"].mean()), 1),
+            "pct_of_hotspots": round(len(sub) / total * 100, 1),
+        })
+
+    # Sort by hotspot_count desc
+    rows.sort(key=lambda r: r["hotspot_count"], reverse=True)
+
+    return PoiStatsResponse(
+        tagged_hotspots=tagged,
+        untagged_hotspots=total - tagged,
+        by_category=rows,
+    )

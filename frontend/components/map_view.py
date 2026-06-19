@@ -10,6 +10,7 @@ def render(filters: dict):
     data = api_client.get_hotspots(
         police_station=filters.get("police_station"),
         violation_type=filters.get("violation_type"),
+        vehicle_type=filters.get("vehicle_type"),
         min_risk=float(filters.get("min_risk", 0)),
     )
     hotspots = data.get("hotspots", [])

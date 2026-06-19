@@ -35,6 +35,7 @@ import pandas as pd
 from backend.app.core.config import settings
 from backend.app.services.aggregations import by_junction, by_police_station
 from backend.app.services.hotspots import compute_hotspots
+from backend.app.services.poi_tagging import poi_summary
 from backend.app.services.temporal import compute_temporal
 
 # An hour bin must exceed this multiple of its neighbors' median to be
@@ -105,6 +106,8 @@ def step_hotspots(
                 "dominant_violation", "police_station",
                 "logging_window", "morning_log_pct", "afternoon_log_pct"]
     print(hotspots[top_cols].head(5).to_string(index=False))
+    print()
+    print(poi_summary(hotspots))
     return hotspots
 
 

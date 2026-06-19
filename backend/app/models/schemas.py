@@ -19,6 +19,7 @@ class Hotspot(BaseModel):
     police_station: str
     junction_name: Optional[str] = None
     near_poi: Optional[str] = None
+    poi_category: Optional[str] = None   # sensitive | metro | commercial | transit
 
 
 class HotspotsResponse(BaseModel):
@@ -82,16 +83,36 @@ class StatsResponse(BaseModel):
     by_police_station: dict[str, int]
 
 
+# ── Add-on: POI / Spillover stats ──────────────────────────────────────────────────
+
+class PoiCategoryItem(BaseModel):
+    poi_category: str
+    hotspot_count: int
+    total_violations: int
+    avg_risk_score: float
+    pct_of_hotspots: float     # % of all hotspots that fall in this category
+
+
+class PoiStatsResponse(BaseModel):
+    tagged_hotspots: int       # hotspots with any POI tag
+    untagged_hotspots: int
+    by_category: list[PoiCategoryItem]
+
+
 # ── Add-on: Forecast ──────────────────────────────────────────────────────────
 
 class ForecastItem(BaseModel):
     hotspot_id: str
-    predict_window: str
-    predicted_intensity: float
-    confidence: float
+    police_station: str
+    predicted_count: float   # XGBoost Poisson forecast for next ISO week
+    prev_week_count: int     # actual count last observed week
+    change_pct: float        # % change vs last week (positive = rising)
+    risk_score: float        # static risk score for display / sorting
 
 
 class ForecastResponse(BaseModel):
+    predict_week: str        # ISO label e.g. "2024-W22"
+    model_mae: float         # mean-absolute-error on 2-week hold-out
     forecast: list[ForecastItem]
 
 
