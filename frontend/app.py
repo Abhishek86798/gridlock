@@ -215,29 +215,36 @@ with tab_patrol:
         if not patrol_data or not patrol_data.get("assignments"):
             st.warning("Patrol data not available. Ensure backend is running.")
         else:
-            p_units = patrol_data.get("units", units_to_deploy)
-        cov_pct = patrol_data.get("coverage_pct", 0.0)
-        assignments = patrol_data.get("assignments", [])
-        coverage_curve = patrol_data.get("coverage_curve", [])
-        
-        c1, c2 = st.columns(2)
-        c1.metric("Units Assigned", len(assignments))
-        c2.metric("Priority Coverage", f"{cov_pct:.1f}%")
-        
-        if coverage_curve:
-            df_curve = pd.DataFrame(coverage_curve)
-            st.write("**Coverage vs. Units Deployed**")
-            st.line_chart(df_curve.set_index("units")["coverage_pct"], use_container_width=True)
+            cov_pct = patrol_data.get("coverage_pct", 0.0)
+            naive_pct = patrol_data.get("naive_coverage_pct")
+            improvement = patrol_data.get("improvement_pct")
+            assignments = patrol_data.get("assignments", [])
+            coverage_curve = patrol_data.get("coverage_curve", [])
 
-        df_patrol = pd.DataFrame(assignments)
-        if not df_patrol.empty:
-            df_patrol = df_patrol.rename(columns={
-                "unit_id": "Unit ID",
-                "hotspot_id": "Hotspot ID",
-                "time_window": "Time Window"
-            })
-            st.write("**Deployment Roster**")
-            st.dataframe(df_patrol, use_container_width=True, hide_index=True)
+            cols = st.columns(4 if improvement is not None else 2)
+            cols[0].metric("Units Assigned", len(assignments))
+            cols[1].metric("Priority Coverage", f"{cov_pct:.1f}%")
+            if naive_pct is not None and improvement is not None:
+                cols[2].metric("Naive Baseline", f"{naive_pct:.1f}%")
+                cols[3].metric("Improvement", f"+{improvement:.1f}%",
+                               help="Coverage gain over naive top-N-by-count baseline")
+
+            if coverage_curve:
+                df_curve = pd.DataFrame(coverage_curve)
+                st.write("**Coverage vs. Units Deployed**")
+                st.line_chart(df_curve.set_index("units")["coverage_pct"], use_container_width=True)
+
+            df_patrol = pd.DataFrame(assignments)
+            if not df_patrol.empty:
+                df_patrol = df_patrol.rename(columns={
+                    "unit_id": "Unit ID",
+                    "hotspot_id": "Hotspot ID",
+                    "time_window": "Time Window",
+                    "risk_score": "Risk Score",
+                })
+                st.write("**Deployment Roster**")
+                st.dataframe(df_patrol, use_container_width=True, hide_index=True)
+
 
 with tab_poi:
     _poi = api_client.get_poi_stats()

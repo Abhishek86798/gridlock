@@ -171,10 +171,38 @@ def get_poi_stats():
 
 @router.get("/repeat-offenders", response_model=RepeatOffendersResponse)
 def get_repeat_offenders(limit: int = Query(20, ge=1, le=100)):
-    if store.repeat_offenders.empty:
-        raise HTTPException(503, "Artifacts not loaded yet")
-    df = store.repeat_offenders.head(limit)
-    return RepeatOffendersResponse(offenders=_to_records(df))
+    """
+    Top repeat offenders by violation count.
+    Vehicle numbers are PII-masked (e.g. FKN00G****63) for public display.
+    """
+    rdf = store.repeat_offenders
+    if rdf.empty:
+        raise HTTPException(503, "Repeat-offender artifacts not loaded yet")
+
+    total_violations = len(store.violations)
+    total_repeat_vehicles = len(rdf)
+    repeat_violation_sum = int(rdf["violation_count"].sum())
+
+    top = rdf.head(limit).copy()
+    # Use masked vehicle numbers for the API response
+    plate_col = "vehicle_number_masked" if "vehicle_number_masked" in top.columns else "vehicle_number"
+
+    offenders = []
+    for _, row in top.iterrows():
+        offenders.append({
+            "vehicle_number": row[plate_col],
+            "violation_count": int(row["violation_count"]),
+            "top_location": row.get("top_location", "Unknown"),
+            "distinct_locations": int(row.get("distinct_locations", 1)),
+            "top_hotspot": row.get("top_hotspot"),
+            "distinct_hotspots": int(row["distinct_hotspots"]) if pd.notna(row.get("distinct_hotspots")) else None,
+        })
+
+    return RepeatOffendersResponse(
+        total_repeat_vehicles=total_repeat_vehicles,
+        pct_of_total_violations=round(repeat_violation_sum / total_violations * 100, 2) if total_violations else 0.0,
+        offenders=offenders,
+    )
 
 
 @router.get("/enforcement-quality", response_model=EnforcementQualityResponse)

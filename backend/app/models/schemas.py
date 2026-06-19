@@ -149,13 +149,17 @@ class PatrolResponse(BaseModel):
 # ── Add-on: Repeat offenders ──────────────────────────────────────────────────
 
 class OffenderItem(BaseModel):
-    vehicle_number: str
+    vehicle_number: str              # PII-masked plate (e.g. FKN00G****63)
     violation_count: int
     top_location: str
     distinct_locations: int
+    top_hotspot: Optional[str] = None
+    distinct_hotspots: Optional[int] = None
 
 
 class RepeatOffendersResponse(BaseModel):
+    total_repeat_vehicles: int       # vehicles with >= 3 violations
+    pct_of_total_violations: float   # what % of all violations they account for
     offenders: list[OffenderItem]
 
 

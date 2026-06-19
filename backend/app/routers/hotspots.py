@@ -17,7 +17,16 @@ router = APIRouter(tags=["hotspots"])
 
 def _to_records(df: pd.DataFrame) -> list[dict]:
     """Convert DataFrame to records, replacing NaN with None for JSON safety."""
-    return df.where(pd.notna(df), other=None).to_dict(orient="records")
+    import math
+    records = df.to_dict(orient="records")
+    for rec in records:
+        for k, v in list(rec.items()):
+            try:
+                if v is pd.NA or (isinstance(v, (float, int)) and math.isnan(v)):
+                    rec[k] = None
+            except (TypeError, ValueError):
+                pass
+    return records
 
 
 def _apply_hotspot_filters(
@@ -41,6 +50,15 @@ def _apply_hotspot_filters(
     return df
 
 
+# Columns to select for the Hotspot schema response (avoid leaking internal columns)
+_HOTSPOT_COLS = [
+    "hotspot_id", "lat", "lng", "risk_score", "violation_count",
+    "dominant_violation", "dominant_vehicle", "logging_window",
+    "morning_log_pct", "afternoon_log_pct", "police_station",
+    "junction_name", "near_poi", "poi_category",
+]
+
+
 @router.get("/hotspots", response_model=HotspotsResponse)
 def get_hotspots(
     police_station: Optional[str] = Query(None, description="Filter by police station name"),
@@ -52,7 +70,9 @@ def get_hotspots(
 ):
     df = _apply_hotspot_filters(store.hotspots, police_station, violation_type, vehicle_type, min_risk, poi_category)
     df = df.head(limit)
-    return HotspotsResponse(count=len(df), hotspots=_to_records(df))
+    # Select only schema-relevant columns
+    use_cols = [c for c in _HOTSPOT_COLS if c in df.columns]
+    return HotspotsResponse(count=len(df), hotspots=_to_records(df[use_cols]))
 
 
 @router.get("/heatmap", response_model=HeatmapResponse)
