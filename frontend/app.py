@@ -171,12 +171,12 @@ with tab_forecast:
         df_fc["Trend"] = df_fc["change_pct"].apply(_trend_badge)
         df_display = df_fc[[
             "hotspot_id", "police_station",
-            "predicted_count", "prev_week_count", "change_pct",
+            "predicted_count", "baseline_count", "change_pct",
             "risk_score", "Trend",
         ]].copy()
         df_display.columns = [
             "Hotspot", "Police Station",
-            "Predicted Count", "Last Week", "Change %",
+            "Predicted Count", "Baseline (8w Avg)", "Change %",
             "Risk Score", "Trend",
         ]
         df_display = df_display.sort_values("Predicted Count", ascending=False).reset_index(drop=True)
@@ -186,7 +186,7 @@ with tab_forecast:
             df_display.style
                 .background_gradient(subset=["Predicted Count", "Risk Score"], cmap="YlOrRd")
                 .background_gradient(subset=["Change %"], cmap="RdYlGn_r")
-                .format({"Predicted Count": "{:.1f}", "Last Week": "{:.0f}",
+                .format({"Predicted Count": "{:.1f}", "Baseline (8w Avg)": "{:.0f}",
                          "Change %": "{:+.1f}%", "Risk Score": "{:.1f}"}),
             use_container_width=True,
         )
@@ -195,7 +195,7 @@ with tab_forecast:
         st.write("**Top 10 hotspots — next-week predicted violations**")
         top10 = df_display.head(10).reset_index(drop=True)
         st.bar_chart(
-            top10.set_index("Hotspot")[["Predicted Count", "Last Week"]],
+            top10.set_index("Hotspot")[["Predicted Count", "Baseline (8w Avg)"]],
             use_container_width=True,
         )
 

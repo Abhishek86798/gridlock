@@ -401,8 +401,8 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         model.predict(inf[_FEATURE_COLS].fillna(0)).clip(min=0)
     )
 
-    # Primary prediction: 4-week rolling mean (MAE 1.30 vs XGBoost 4.63)
-    inf["predicted_count"] = inf["rolling_mean_4w"].clip(lower=0).round(1)
+    # Primary prediction: Rolling mean (outperforms XGBoost on current data)
+    inf["predicted_count"] = inf["rolling_mean_4w"].round(1)
 
     # Use max(prev, 1) to avoid absurd % when baseline_count is 0
     inf["change_pct"] = (
