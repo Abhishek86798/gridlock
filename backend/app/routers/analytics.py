@@ -6,7 +6,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.app.core import store
-from backend.app.models.schemas import ForecastResponse, PoiStatsResponse, StatsResponse, TemporalResponse, PatrolResponse
+from backend.app.models.schemas import ForecastResponse, PoiStatsResponse, StatsResponse, TemporalResponse, PatrolResponse, RepeatOffendersResponse, EnforcementQualityResponse
 from backend.app.services import forecast as forecast_service
 from backend.app.services import patrol_optimizer
 
@@ -167,3 +167,30 @@ def get_poi_stats():
         untagged_hotspots=total - tagged,
         by_category=rows,
     )
+
+
+@router.get("/repeat-offenders", response_model=RepeatOffendersResponse)
+def get_repeat_offenders(limit: int = Query(20, ge=1, le=100)):
+    if store.repeat_offenders.empty:
+        raise HTTPException(503, "Artifacts not loaded yet")
+    df = store.repeat_offenders.head(limit)
+    return RepeatOffendersResponse(offenders=_to_records(df))
+
+
+@router.get("/enforcement-quality", response_model=EnforcementQualityResponse)
+def get_enforcement_quality():
+    vdf = store.violations
+    if vdf.empty:
+        raise HTTPException(503, "Artifacts not loaded yet")
+    grp = vdf.groupby("police_station")
+    rows = []
+    for station, g in grp:
+        total = len(g)
+        rejected = (g["validation_status"] == "rejected").sum()
+        rows.append({
+            "police_station": station,
+            "rejection_rate": round(float(rejected) / total, 4) if total else 0.0,
+            "total": total,
+        })
+    rows.sort(key=lambda x: x["rejection_rate"], reverse=True)
+    return EnforcementQualityResponse(by_area=rows)

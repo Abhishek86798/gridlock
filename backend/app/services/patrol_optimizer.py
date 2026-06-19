@@ -6,6 +6,7 @@ import pandas as pd
 
 from backend.app.core import store
 from backend.app.models.schemas import PatrolAssignment, PatrolResponse, CoverageCurvePoint
+from backend.app.services.temporal import _format_peak_window
 
 # Minimum violations needed to be considered for a patrol assignment
 _MIN_VIOLATION_COUNT = 20
@@ -32,24 +33,15 @@ def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def optimize_patrol(units: int) -> PatrolResponse:
-    """
-    Assign N patrol units to maximize high-risk coverage without bunching.
-    
-    1. Dispatch Score: risk_score * violation_count (with a min-count floor).
-       This ensures high-volume areas get units, not just severe-but-rare areas.
-    2. Greedy Spatial Coverage: assign a unit to the highest priority uncovered
-       hotspot, then mark all hotspots within _COVERAGE_RADIUS_M as covered.
-    """
     df = store.hotspots
-    if df.empty:
+    tdf = store.temporal
+    if df.empty or tdf.empty:
         return PatrolResponse(units=units, coverage_pct=0.0, assignments=[])
 
     # 1. Compute dispatch score (priority)
-    # Floor: if violation_count < MIN, score = 0
     scores = df["risk_score"] * df["violation_count"]
     valid_mask = df["violation_count"] >= _MIN_VIOLATION_COUNT
     
-    # We create a working copy with the priority
     work_df = df[valid_mask].copy()
     work_df["priority"] = scores[valid_mask]
     
@@ -65,9 +57,9 @@ def optimize_patrol(units: int) -> PatrolResponse:
     covered_priority = 0.0
     covered_indices = set()
     
-    # 2. Greedy spatial assignment
+    # 2. Greedy spatial assignment with dynamic temporal window
     unit_id = 1
-    max_units = max(units, 100)  # Always compute at least 100 for the curve
+    max_units = max(units, 100)  # compute curve
     for idx, row in work_df.iterrows():
         if unit_id > max_units:
             break
@@ -75,12 +67,18 @@ def optimize_patrol(units: int) -> PatrolResponse:
         if idx in covered_indices:
             continue
             
+        # Get dynamic temporal peak window
+        hid = row["hotspot_id"]
+        grp = tdf[tdf["hotspot_id"] == hid]
+        time_window = _format_peak_window(grp) if not grp.empty else row.get("logging_window", "all_day")
+            
         # Assign unit to this hotspot
         assignments.append(
             PatrolAssignment(
                 unit_id=unit_id,
-                hotspot_id=row["hotspot_id"],
-                time_window="all_day"
+                hotspot_id=hid,
+                time_window=time_window,
+                risk_score=row["risk_score"]
             )
         )
         
@@ -103,20 +101,26 @@ def optimize_patrol(units: int) -> PatrolResponse:
         
         unit_id += 1
 
-    # Filter assignments back down to requested 'units'
     final_assignments = [a for a in assignments if a.unit_id <= units]
     
-    # If we requested N units but finished earlier, the coverage is the max achieved
     if not coverage_curve:
         final_coverage_pct = 0.0
     else:
-        # Get the coverage at exactly 'units', or the last one if we ran out of hotspots early
         exact_match = [c.coverage_pct for c in coverage_curve if c.units == units]
         final_coverage_pct = exact_match[0] if exact_match else coverage_curve[-1].coverage_pct
+
+    # 3. Naive baseline comparison (count-based, top-N, no spatial checks)
+    naive_df = df.sort_values("violation_count", ascending=False).head(units)
+    naive_covered_priority = (naive_df["risk_score"] * naive_df["violation_count"]).sum()
+    naive_coverage_pct = round((naive_covered_priority / total_priority * 100) if total_priority else 0.0, 1)
+    
+    improvement_pct = round(((final_coverage_pct - naive_coverage_pct) / naive_coverage_pct * 100) if naive_coverage_pct else 0.0, 1)
 
     return PatrolResponse(
         units=units,
         coverage_pct=final_coverage_pct,
+        naive_coverage_pct=naive_coverage_pct,
+        improvement_pct=improvement_pct,
         assignments=final_assignments,
         coverage_curve=coverage_curve
     )

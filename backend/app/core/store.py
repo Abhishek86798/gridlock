@@ -13,3 +13,5 @@ hotspots: pd.DataFrame = pd.DataFrame()
 temporal: pd.DataFrame = pd.DataFrame()
 by_station: pd.DataFrame = pd.DataFrame()
 by_junction: pd.DataFrame = pd.DataFrame()
+
+repeat_offenders: pd.DataFrame = pd.DataFrame()

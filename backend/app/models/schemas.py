@@ -129,6 +129,7 @@ class PatrolAssignment(BaseModel):
     unit_id: int
     hotspot_id: str
     time_window: str
+    risk_score: Optional[float] = None
 
 
 class CoverageCurvePoint(BaseModel):
@@ -139,6 +140,8 @@ class CoverageCurvePoint(BaseModel):
 class PatrolResponse(BaseModel):
     units: int
     coverage_pct: float
+    naive_coverage_pct: Optional[float] = None
+    improvement_pct: Optional[float] = None
     assignments: list[PatrolAssignment]
     coverage_curve: list[CoverageCurvePoint] = []
 

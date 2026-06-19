@@ -55,6 +55,8 @@ async def lifespan(app: FastAPI):
     store.temporal    = _load_parquet(settings.temporal_parquet,    "temporal")
     store.by_station  = _load_parquet(settings.by_station_parquet,  "by_station")
     store.by_junction = _load_parquet(settings.by_junction_parquet, "by_junction")
+    if (settings.processed_dir / 'repeat_offenders.parquet').exists():
+        store.repeat_offenders = _load_parquet(settings.processed_dir / 'repeat_offenders.parquet', 'repeat_offenders')
     print("-- Ready --")
     yield
     # Nothing to clean up — DataFrames are GC'd automatically.
