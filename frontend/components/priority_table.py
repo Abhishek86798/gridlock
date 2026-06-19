@@ -18,7 +18,7 @@ def render(filters: dict):
     df = pd.DataFrame(rows)[
         ["rank", "hotspot_id", "risk_score", "logging_window", "police_station", "recommended_units"]
     ]
-    df.columns = ["Rank", "Zone", "Risk Score", "Logging Window", "Station", "Units"]
+    df.columns = ["Rank", "Zone", "Risk Score", "Peak 3h Block", "Station", "Units"]
 
     st.dataframe(
         df.style.background_gradient(subset=["Risk Score"], cmap="RdYlGn_r"),

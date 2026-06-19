@@ -106,7 +106,9 @@ class ForecastItem(BaseModel):
     police_station: str
     predicted_count: float   # 4-week rolling mean forecast for next ISO week
     prev_week_count: int     # actual count last observed week
-    change_pct: float        # % change vs last week (positive = rising)
+    change_pct: Optional[float] = None   # % change vs last week (null if insufficient baseline)
+    count_delta: Optional[int] = None    # raw predicted - prev_week_count
+    trend_label: Optional[str] = None    # "emerging" / "rising" / "stable" / "declining"
     risk_score: float        # static risk score for display / sorting
 
 

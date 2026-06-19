@@ -408,12 +408,54 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         / inf["prev_week_count"].clip(lower=1).astype(float)
         * 100
     ).round(1)
+    inf["count_delta"] = (inf["predicted_count"] - inf["prev_week_count"]).round(0).astype(int)
 
     top = inf.nlargest(top_n, "predicted_count").reset_index(drop=True)
 
     mae       = ctx["mae"]
     mae_last  = ctx["mae_naive_last"]
     mae_roll  = ctx["mae_naive_roll"]
+
+    def _build_item(row):
+        predicted = round(float(row["predicted_count"]), 1)
+        prev = int(row["prev_week_count"])
+        delta = int(row["count_delta"])
+
+        # If baseline is too low, percentage is meaningless
+        if prev < 3:
+            return {
+                "hotspot_id":      row["hotspot_id"],
+                "police_station":  row["police_station"],
+                "predicted_count": predicted,
+                "prev_week_count": prev,
+                "change_pct":      None,
+                "count_delta":     delta,
+                "trend_label":     "emerging" if predicted > 5 else "insufficient history",
+                "risk_score":      round(float(row["risk_score"]), 1),
+            }
+
+        pct = float(row["change_pct"])
+        # Classify trend
+        if pct > 500:
+            label = "surging"
+            pct = round(pct, 1)  # keep actual value, don't cap
+        elif pct > 50:
+            label = "rising"
+        elif pct > -20:
+            label = "stable"
+        else:
+            label = "declining"
+
+        return {
+            "hotspot_id":      row["hotspot_id"],
+            "police_station":  row["police_station"],
+            "predicted_count": predicted,
+            "prev_week_count": prev,
+            "change_pct":      round(pct, 1),
+            "count_delta":     delta,
+            "trend_label":     label,
+            "risk_score":      round(float(row["risk_score"]), 1),
+        }
 
     return {
         "predict_week":              ctx["predict_week"],
@@ -435,16 +477,6 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
                 "Rolling mean is used as the primary prediction."
             ).format(mae, mae_roll),
         },
-        "forecast": [
-            {
-                "hotspot_id":      row["hotspot_id"],
-                "police_station":  row["police_station"],
-                "predicted_count": round(float(row["predicted_count"]), 1),
-                "prev_week_count": int(row["prev_week_count"]),
-                "change_pct":      float(row["change_pct"]),
-                "risk_score":      round(float(row["risk_score"]), 1),
-            }
-            for _, row in top.iterrows()
-        ],
+        "forecast": [_build_item(row) for _, row in top.iterrows()],
     }
 
