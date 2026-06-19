@@ -104,7 +104,7 @@ class PoiStatsResponse(BaseModel):
 class ForecastItem(BaseModel):
     hotspot_id: str
     police_station: str
-    predicted_count: float   # XGBoost Poisson forecast for next ISO week
+    predicted_count: float   # 4-week rolling mean forecast for next ISO week
     prev_week_count: int     # actual count last observed week
     change_pct: float        # % change vs last week (positive = rising)
     risk_score: float        # static risk score for display / sorting
@@ -112,14 +112,16 @@ class ForecastItem(BaseModel):
 
 class ForecastResponse(BaseModel):
     predict_week: str                        # ISO label e.g. "2024-W22"
-    model_mae: float                         # XGBoost MAE on 2-week hold-out
+    method: Optional[str] = None             # prediction method used
+    model_mae: float                         # MAE of primary method on hold-out
     baseline_mae_last_week: float            # naive baseline: predict = last week's count
     baseline_mae_rolling_mean: float         # naive baseline: predict = 4-week rolling mean
-    pct_beat_last_week: Optional[float]      # % MAE reduction vs last-week naive (positive = better)
-    pct_beat_rolling_mean: Optional[float]   # % MAE reduction vs rolling-mean naive
+    pct_beat_last_week: Optional[float] = None      # deprecated — use model_comparison
+    pct_beat_rolling_mean: Optional[float] = None   # deprecated — use model_comparison
     precision_at: dict[int, float]           # {10: 0.7, 20: 0.65} — top-N overlap on hold-out
     weekly_totals: list[dict]                # [{week, total_violations}] for ramp diagnosis
     data_quality_note: str                   # plain-English enforcement-ramp / gap assessment
+    model_comparison: Optional[dict] = None  # XGBoost vs rolling mean MAE comparison
     forecast: list[ForecastItem]
 
 

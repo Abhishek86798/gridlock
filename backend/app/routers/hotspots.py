@@ -98,12 +98,21 @@ def get_priority(
     vehicle_type: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
 ):
+    from backend.app.services import patrol_optimizer
+
     df = store.hotspots.copy()
     if police_station:
         df = df[df["police_station"] == police_station]
     if vehicle_type:
         df = df[df["dominant_vehicle"].str.contains(vehicle_type, case=False, na=False)]
     df = df.sort_values("risk_score", ascending=False).head(limit).reset_index(drop=True)
+
+    # Build hotspot→units lookup from the real patrol optimizer (max 100 units
+    # to get the full assignment map; the optimizer uses spatial de-bunching).
+    patrol = patrol_optimizer.optimize_patrol(units=100)
+    hs_to_units: dict[str, int] = {}
+    for a in patrol.assignments:
+        hs_to_units[a.hotspot_id] = hs_to_units.get(a.hotspot_id, 0) + 1
 
     items = [
         {
@@ -112,8 +121,9 @@ def get_priority(
             "risk_score": row["risk_score"],
             "logging_window": row["logging_window"],
             "police_station": row["police_station"],
-            "recommended_units": max(1, int(row["risk_score"] // 30)),
+            "recommended_units": hs_to_units.get(row["hotspot_id"], 1),
         }
         for i, (_, row) in enumerate(df.iterrows())
     ]
     return PriorityResponse(priority=items)
+

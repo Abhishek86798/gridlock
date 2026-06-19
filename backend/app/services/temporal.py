@@ -32,30 +32,42 @@ _DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 # ---- helpers -----------------------------------------------------------------
 
-def _format_peak_window(grp: pd.DataFrame) -> str:
+def _format_peak_window(grp: pd.DataFrame, max_hours: int = 3) -> str:
     """Return a human-readable peak window from a per-hotspot temporal group.
 
-    Finds the contiguous hour block that holds the most violations and
-    formats it as 'DayRange HH:00-HH:00', e.g. 'Mon-Fri 08:00-11:00'.
-    Falls back to the single peak hour if no block is obvious.
+    Uses a sliding window of `max_hours` width across all 24 hours to find
+    the contiguous block with the highest total violation count.
+    Formats as 'DayRange HH:00-HH:00', e.g. 'Mon-Fri 08:00-11:00'.
     """
-    # Aggregate across days to find peak hours
-    by_hour = grp.groupby("hour")["count"].sum().sort_values(ascending=False)
+    # Aggregate across days to find total count per hour
+    by_hour = grp.groupby("hour")["count"].sum()
     if by_hour.empty:
         return "Unknown"
 
-    peak_hour = int(by_hour.index[0])
+    # Reindex to full 0-23 range, fill missing hours with 0
+    by_hour = by_hour.reindex(range(24), fill_value=0)
 
-    # Find the 3 busiest hours and the days they belong to
-    top_hours = sorted(by_hour.head(3).index.tolist())
-    hour_start = min(top_hours)
-    hour_end   = max(top_hours) + 1   # exclusive end
+    # Sliding window: find the best contiguous block of `max_hours`
+    best_start = 0
+    best_total = 0
+    for start in range(24):
+        total = sum(by_hour.get((start + h) % 24, 0) for h in range(max_hours))
+        if total > best_total:
+            best_total = total
+            best_start = start
+
+    hour_start = best_start
+    hour_end = (best_start + max_hours) % 24
+    # For display, use non-wrapped format if possible
+    if hour_end == 0:
+        hour_end = 24
 
     # Find which days carry the bulk of that window's load
-    window_mask = grp["hour"].between(hour_start, max(top_hours))
+    window_hours = [(best_start + h) % 24 for h in range(max_hours)]
+    window_mask = grp["hour"].isin(window_hours)
     by_day = grp.loc[window_mask].groupby("day_of_week")["count"].sum()
     if by_day.empty:
-        return f"{_DAY_ABBR[0]} {peak_hour:02d}:00"
+        return f"{_DAY_ABBR[0]} {hour_start:02d}:00-{hour_end:02d}:00"
 
     # Are we weekday-heavy, weekend-heavy, or spread?
     weekday_share = by_day[by_day.index < 5].sum() / by_day.sum()

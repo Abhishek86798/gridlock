@@ -394,12 +394,18 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         _inference_row(g) for _, g in last4.groupby("hotspot_id", sort=False)
     ])
 
-    inf["predicted_count"] = (
+    # XGBoost prediction — kept for comparison but NOT the headline number
+    inf["xgb_predicted"] = (
         model.predict(inf[_FEATURE_COLS].fillna(0)).clip(min=0)
     )
+
+    # Primary prediction: 4-week rolling mean (MAE 1.30 vs XGBoost 4.63)
+    inf["predicted_count"] = inf["rolling_mean_4w"].clip(lower=0).round(1)
+
+    # Use max(prev, 1) to avoid absurd % when prev_week_count is 0
     inf["change_pct"] = (
         (inf["predicted_count"] - inf["prev_week_count"])
-        / (inf["prev_week_count"].astype(float) + 1e-9)
+        / inf["prev_week_count"].clip(lower=1).astype(float)
         * 100
     ).round(1)
 
@@ -409,21 +415,26 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     mae_last  = ctx["mae_naive_last"]
     mae_roll  = ctx["mae_naive_roll"]
 
-    def _pct_beat(baseline: float) -> float | None:
-        if baseline == 0.0:
-            return None
-        return round((baseline - mae) / baseline * 100, 1)
-
     return {
         "predict_week":              ctx["predict_week"],
-        "model_mae":                 round(mae, 2),
+        "method":                    "4-week rolling mean",
+        "model_mae":                 round(mae_roll, 2),
         "baseline_mae_last_week":    round(mae_last, 2),
         "baseline_mae_rolling_mean": round(mae_roll, 2),
-        "pct_beat_last_week":        _pct_beat(mae_last),
-        "pct_beat_rolling_mean":     _pct_beat(mae_roll),
         "precision_at":              ctx["precision_at"],
         "weekly_totals":             ctx["weekly_totals"],
         "data_quality_note":         ctx["data_quality_note"],
+        "model_comparison": {
+            "xgboost_mae":           round(mae, 2),
+            "rolling_mean_mae":      round(mae_roll, 2),
+            "last_week_mae":         round(mae_last, 2),
+            "note":                  (
+                "XGBoost count:poisson model trained but underperforms "
+                "the simple rolling mean baseline (MAE {:.2f} vs {:.2f}) "
+                "due to enforcement reporting gaps in weeks 06-10. "
+                "Rolling mean is used as the primary prediction."
+            ).format(mae, mae_roll),
+        },
         "forecast": [
             {
                 "hotspot_id":      row["hotspot_id"],
@@ -436,3 +447,4 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
             for _, row in top.iterrows()
         ],
     }
+

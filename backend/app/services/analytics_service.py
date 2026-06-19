@@ -17,7 +17,15 @@ def _load(name: str):
 
 
 def get_priority(**filters) -> PriorityResponse:
+    from backend.app.services import patrol_optimizer
     df = _load("hotspots").sort_values("risk_score", ascending=False).reset_index(drop=True)
+
+    # Build hotspot→units lookup from the real patrol optimizer
+    patrol = patrol_optimizer.optimize_patrol(units=100)
+    hs_to_units: dict[str, int] = {}
+    for a in patrol.assignments:
+        hs_to_units[a.hotspot_id] = hs_to_units.get(a.hotspot_id, 0) + 1
+
     items = []
     for rank, (_, row) in enumerate(df.iterrows(), start=1):
         items.append({
@@ -26,7 +34,7 @@ def get_priority(**filters) -> PriorityResponse:
             "risk_score": row["risk_score"],
             "logging_window": row["logging_window"],
             "police_station": row["police_station"],
-            "recommended_units": max(1, int(row["risk_score"] // 30)),
+            "recommended_units": hs_to_units.get(row["hotspot_id"], 1),
         })
     return PriorityResponse(priority=items)
 
