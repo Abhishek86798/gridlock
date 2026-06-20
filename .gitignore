@@ -18,3 +18,9 @@ data/raw/*.csv
 dataset\voilations.csv
 
 .venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+frontend/__pycache__/
+
