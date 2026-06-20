@@ -130,6 +130,7 @@ class ForecastResponse(BaseModel):
     data_quality_note: str                   # plain-English enforcement-ramp / gap assessment
     model_comparison: Optional[dict] = None  # XGBoost vs rolling mean MAE comparison
     forecast: list[ForecastItem]
+    top_escalations: list[ForecastItem] = []  # escalation-score ranked (significant hotspots only)
 
 
 # ── Add-on: Patrol ────────────────────────────────────────────────────────────
