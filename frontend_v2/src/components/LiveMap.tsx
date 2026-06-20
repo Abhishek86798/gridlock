@@ -10,7 +10,7 @@ const TIER_COLORS: Record<string, string> = {
   Standard: "#3B82F6",
 };
 
-export default function LiveMap({ hotspots, assignments = [] }: { hotspots: any[], assignments?: any[] }) {
+export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { hotspots: any[], assignments?: any[], highlightPoi?: string | null }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -53,19 +53,36 @@ export default function LiveMap({ hotspots, assignments = [] }: { hotspots: any[
         />
         {hotspots.map((hs) => {
           const tier = getTier(hs.risk_score);
-          const color = TIER_COLORS[tier];
-          const radius = Math.max(5, hs.risk_score / 8);
+          let color = TIER_COLORS[tier];
+          let fillOpacity = 0.8;
+          let weight = 1;
+          let radius = Math.max(5, hs.risk_score / 8);
+
           const isAssigned = assignedHotspotIds.has(hs.hotspot_id);
+
+          // Apply POI highlighting logic if a category is selected
+          if (highlightPoi) {
+            if (hs.poi_category === highlightPoi) {
+              color = "#D946EF"; // Vibrant Fuchsia
+              fillOpacity = 0.9;
+              radius = radius + 2;
+              weight = 2;
+            } else {
+              color = "#374151"; // Faded gray for non-matches
+              fillOpacity = 0.2;
+              weight = 0;
+            }
+          }
 
           return (
             <div key={hs.hotspot_id}>
               <CircleMarker
                 center={[hs.lat, hs.lng]}
                 pathOptions={{
-                  color: color,
+                  color: highlightPoi && hs.poi_category === highlightPoi ? "#F0ABFC" : color, // Lighter border for matches
                   fillColor: color,
-                  fillOpacity: 0.8,
-                  weight: 1,
+                  fillOpacity: fillOpacity,
+                  weight: weight,
                 }}
                 radius={radius}
               >
@@ -91,6 +108,12 @@ export default function LiveMap({ hotspots, assignments = [] }: { hotspots: any[
                     <span className="text-text-secondary text-[10px] uppercase tracking-[0.2em]">Win</span>
                     <span className="font-light text-text-primary">{hs.logging_window}</span>
                   </div>
+                  {hs.poi_category && (
+                    <div className="flex justify-between pb-1 border-t border-border pt-1 mt-1">
+                      <span className="text-text-secondary text-[10px] uppercase tracking-[0.2em]">POI</span>
+                      <span className="font-medium text-fuchsia-400 capitalize">{hs.poi_category}</span>
+                    </div>
+                  )}
                   {isAssigned && (
                     <div className="mt-2 border-t border-border pt-2">
                       <span className="inline-block px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-emerald-900/40 text-emerald-400 border border-emerald-500/50">
