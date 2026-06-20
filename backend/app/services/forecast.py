@@ -39,6 +39,17 @@ from backend.app.core.config import settings
 
 _LAG_WEEKS = 4
 
+# Clean week windows — weeks whose validation_status approval pipeline was
+# functioning normally.  W06-W10 and W12-W13 have >80% NULL validation_status
+# due to an approval-system backlog (raw data volume is normal; see
+# data_quality_note for details).
+_CLEAN_BASELINE_WEEKS = [202401, 202402, 202403, 202404, 202405]  # W01-W05
+_CLEAN_LAG_WEEKS      = [202402, 202403, 202404, 202405]          # W02-W05
+
+# Minimum baseline count for a hotspot to be considered "significant" for
+# escalation ranking — matches the is_escalating threshold.
+_ESCALATION_BASELINE_FLOOR = 15
+
 _SEVERITY_MAP: dict[str, float] = {
     "PARKING IN A MAIN ROAD":       5.0,
     "PARKING NEAR ROAD CROSSING":   4.0,
@@ -374,6 +385,11 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     Return the top_n hotspots predicted to have the highest violation count
     in the next ISO week, ranked by predicted_count descending.
 
+    Also returns a separate ``top_escalations`` list ranked by
+    ``escalation_score`` (change_pct * baseline_count) for hotspots with
+    baseline > _ESCALATION_BASELINE_FLOOR — this surfaces genuinely
+    significant escalations rather than small-baseline noise.
+
     Returns a plain dict matching the ForecastResponse schema.
     """
     ctx     = _ensure_trained()
@@ -382,55 +398,41 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     next_yr = ctx["next_yr"]
     next_wk = ctx["next_wk"]
 
-    # For each hotspot, build one inference row from its 8 most recent weeks to calculate baseline.
-    # The model still only uses lag1..lag4 as features.
-    last8 = (
-        panel
-        .sort_values("week_ord")
-        .groupby("hotspot_id", sort=False)
-        .tail(8)
-    )
+    # ── Build clean baseline and predicted counts from pre-gap weeks ──────
+    # Baseline: mean weekly count across W01-W05 (clean validation period).
+    # Predicted: rolling mean across W02-W05 (last 4 clean weeks).
+    # Rationale: weeks W06-W10 and W12-W13 have >80% NULL validation_status
+    # due to an approval-system backlog — raw data volume is normal but
+    # the pipeline's approved-only filter drops nearly all rows.
+    baseline_panel = panel[panel["week_ord"].isin(_CLEAN_BASELINE_WEEKS)]
+    lag_panel      = panel[panel["week_ord"].isin(_CLEAN_LAG_WEEKS)]
 
-    def _inference_row(grp: pd.DataFrame) -> dict:
-        grp    = grp.sort_values("week_ord")
-        counts = grp["count"].values
-        # Pad with zeros to exactly 8 weeks
-        counts = np.pad(counts, (max(0, 8 - len(counts)), 0))[-8:]
-        # XGBoost features need the last 4 weeks (lag1..lag4).
-        counts4 = counts[-4:]
-        lag1, lag2, lag3, lag4 = counts4[3], counts4[2], counts4[1], counts4[0]
-        latest = grp.iloc[-1]
-        return {
-            "hotspot_id":         latest["hotspot_id"],
-            "police_station":     latest["police_station"],
-            "risk_score":         float(latest["risk_score"]),
-            "lag1":               float(lag1),
-            "lag2":               float(lag2),
-            "lag3":               float(lag3),
-            "lag4":               float(lag4),
-            "rolling_mean_4w":    float(counts4.mean()),
-            "month":              _month_from_iso(next_yr, next_wk),
-            "violation_severity": float(latest["violation_severity"]),
-            "has_junction":       float(latest["has_junction"]),
-            "has_poi":            float(latest["has_poi"]),
-            "baseline_count":     int(counts.mean()),
-        }
+    rows = []
+    for hs_id in panel["hotspot_id"].unique():
+        hs_base = baseline_panel[baseline_panel["hotspot_id"] == hs_id]
+        hs_lag  = lag_panel[lag_panel["hotspot_id"] == hs_id]
+        hs_any  = panel[panel["hotspot_id"] == hs_id].iloc[-1]
 
-    inf = pd.DataFrame([
-        _inference_row(g) for _, g in last8.groupby("hotspot_id", sort=False)
-    ])
+        b_vals = hs_base["count"].values
+        baseline = int(round(float(b_vals.mean()))) if len(b_vals) > 0 else 0
 
-    # XGBoost prediction — kept for comparison but NOT the headline number
-    inf["xgb_predicted"] = (
-        model.predict(inf[_FEATURE_COLS].fillna(0)).clip(min=0)
-    )
+        l_vals = hs_lag["count"].values
+        pred   = round(float(l_vals.mean()), 1) if len(l_vals) > 0 else 0.0
 
-    # Primary prediction: Rolling mean — near-identical MAE to XGBoost on
-    # clean holdout (5.25 vs 5.20) but trivially interpretable for a police
-    # audience ("average of last 4 weeks"). XGBoost kept for comparison only.
-    inf["predicted_count"] = inf["rolling_mean_4w"].round(1)
+        rows.append({
+            "hotspot_id":         hs_any["hotspot_id"],
+            "police_station":     hs_any["police_station"],
+            "risk_score":         float(hs_any["risk_score"]),
+            "violation_severity": float(hs_any["violation_severity"]),
+            "has_junction":       float(hs_any["has_junction"]),
+            "has_poi":            float(hs_any["has_poi"]),
+            "baseline_count":     baseline,
+            "predicted_count":    pred,
+        })
 
-    # Use max(prev, 1) to avoid absurd % when baseline_count is 0
+    inf = pd.DataFrame(rows)
+
+    # Change metrics
     inf["change_pct"] = (
         (inf["predicted_count"] - inf["baseline_count"])
         / inf["baseline_count"].clip(lower=1).astype(float)
@@ -438,7 +440,41 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     ).round(1)
     inf["count_delta"] = (inf["predicted_count"] - inf["baseline_count"]).round(0).astype(int)
 
-    top = inf.nlargest(top_n, "predicted_count").reset_index(drop=True)
+    # Escalation score: pct * baseline — ranks hotspots by combined
+    # significance (both large % increase AND high absolute volume).
+    inf["escalation_score"] = (inf["change_pct"] * inf["baseline_count"]).round(1)
+
+    # Status tier for sorting (computed pre-_build_item so we can sort the DF).
+    # Mirrors the trend_label + is_escalating logic in _build_item.
+    def _tier_priority(row) -> int:
+        pct = float(row["change_pct"])
+        base = int(row["baseline_count"])
+        if pct > 20 and base > _ESCALATION_BASELINE_FLOOR:
+            return 0  # Critical
+        if pct > 15:
+            return 1  # Rising
+        if pct > -15:
+            return 2  # Stable
+        return 3      # Declining
+
+    inf["_tier"] = inf.apply(_tier_priority, axis=1)
+
+    # ── Two ranked lists ─────────────────────────────────────────────────
+    # 1. Volume-ranked (full list for the expandable table)
+    top_volume = inf.nlargest(top_n, "predicted_count").reset_index(drop=True)
+
+    # 2. Escalation-ranked (for the Top 10 chart + table): only Critical/Rising
+    #    hotspots with baseline > _ESCALATION_BASELINE_FLOOR, sorted by tier
+    #    first (Critical before Rising), then escalation_score within each tier.
+    sig = inf[
+        (inf["baseline_count"] > _ESCALATION_BASELINE_FLOOR)
+        & (inf["_tier"].isin([0, 1]))  # Critical or Rising only
+    ].copy()
+    top_escalations = (
+        sig.sort_values(["_tier", "escalation_score"], ascending=[True, False])
+        .head(10)
+        .reset_index(drop=True)
+    )
 
     mae       = ctx["mae"]
     mae_last  = ctx["mae_naive_last"]
@@ -452,41 +488,39 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         # If baseline is too low, percentage is meaningless
         if prev < 3:
             return {
-                "hotspot_id":      row["hotspot_id"],
-                "police_station":  row["police_station"],
-                "predicted_count": predicted,
-                "baseline_count":  prev,
-                "change_pct":      None,
-                "count_delta":     delta,
-                "trend_label":     "emerging" if predicted > 5 else "insufficient history",
-                "risk_score":      round(float(row["risk_score"]), 1),
-                "is_escalating":   False,
+                "hotspot_id":       row["hotspot_id"],
+                "police_station":   row["police_station"],
+                "predicted_count":  predicted,
+                "baseline_count":   prev,
+                "change_pct":       None,
+                "count_delta":      delta,
+                "trend_label":      "emerging" if predicted > 5 else "insufficient history",
+                "risk_score":       round(float(row["risk_score"]), 1),
+                "is_escalating":    False,
             }
 
         pct = float(row["change_pct"])
-        # Classify trend
-        if pct > 500:
-            label = "surging"
-            pct = round(pct, 1)  # keep actual value, don't cap
-        elif pct > 50:
+        # Classify trend — thresholds chosen so each label appears in the
+        # current data distribution (max change ~25% with clean baselines).
+        if pct > 15:
             label = "rising"
-        elif pct > -20:
+        elif pct > -15:
             label = "stable"
         else:
             label = "declining"
 
-        is_escalating = bool(pct > 20 and prev > 15)
+        is_escalating = bool(pct > 20 and prev > _ESCALATION_BASELINE_FLOOR)
 
         return {
-            "hotspot_id":      row["hotspot_id"],
-            "police_station":  row["police_station"],
-            "predicted_count": predicted,
-            "baseline_count":  prev,
-            "change_pct":      round(pct, 1),
-            "count_delta":     delta,
-            "trend_label":     label,
-            "risk_score":      round(float(row["risk_score"]), 1),
-            "is_escalating":   is_escalating,
+            "hotspot_id":       row["hotspot_id"],
+            "police_station":   row["police_station"],
+            "predicted_count":  predicted,
+            "baseline_count":   prev,
+            "change_pct":       round(pct, 1),
+            "count_delta":      delta,
+            "trend_label":      label,
+            "risk_score":       round(float(row["risk_score"]), 1),
+            "is_escalating":    is_escalating,
         }
 
     # Compute calendar date context for the prediction week
@@ -502,7 +536,7 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         "predict_week_start":        pw_start.isoformat(),
         "predict_week_end":          pw_end.isoformat(),
         "data_through":              data_through.isoformat(),
-        "method":                    "4-week rolling mean",
+        "method":                    "4-week rolling mean (clean weeks W02-W05)",
         "model_mae":                 round(mae_roll, 2),
         "baseline_mae_last_week":    round(mae_last, 2),
         "baseline_mae_rolling_mean": round(mae_roll, 2),
@@ -518,9 +552,13 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
                 "XGBoost count:poisson and 4-week rolling mean are near-tied "
                 "(MAE {:.2f} vs {:.2f}). Rolling mean is retained as the "
                 "primary prediction because it is trivially interpretable "
-                "for a non-technical police audience and equally accurate."
+                "for a non-technical police audience and equally accurate. "
+                "Predictions are based on the last fully clean 4-week period "
+                "(W02-W05) because weeks W06 onward are degraded by a "
+                "validation_status approval backlog in the source data."
             ).format(mae, mae_roll),
         },
-        "forecast": [_build_item(row) for _, row in top.iterrows()],
+        "forecast":          [_build_item(row) for _, row in top_volume.iterrows()],
+        "top_escalations":   [_build_item(row) for _, row in top_escalations.iterrows()],
     }
 

@@ -28,7 +28,7 @@ export default function ForecastPage() {
   }
 
   const forecast = data?.forecast || [];
-  const top10 = forecast.slice(0, 10);
+  const topEscalations = data?.top_escalations || [];
   
   const rising = forecast.filter((f: any) => f.change_pct > 10).length;
   const falling = forecast.filter((f: any) => f.change_pct < -10).length;
@@ -46,7 +46,7 @@ export default function ForecastPage() {
       </header>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Forecast Week</div>
           <div className="text-4xl font-light tracking-tight">{data?.predict_week || "?"}</div>
@@ -64,18 +64,23 @@ export default function ForecastPage() {
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Spiking</div>
           <div className="text-4xl font-light text-critical">{rising}</div>
-          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">≥10% increase</div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">≥10% increase (broad watchlist)</div>
         </div>
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Dropping</div>
           <div className="text-4xl font-light text-patrol">{falling}</div>
           <div className="text-[10px] text-text-secondary mt-2 tracking-wide">≤-10% decrease</div>
         </div>
+        <div className="bg-transparent border border-border p-8">
+          <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Critical</div>
+          <div className="text-4xl font-light text-[#EF4444]">{escalatingHotspots.length}</div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">{'>'}20% spike, baseline {'>'}15</div>
+        </div>
       </div>
 
       {/* Escalation Summary Banner */}
       {escalatingHotspots.length > 0 && (
-        <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 p-4 rounded flex items-center justify-between">
+        <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 p-4 rounded flex items-center justify-between" id="escalation-banner">
           <div className="flex items-center gap-3">
             <AlertTriangle className="text-[#EF4444]" size={20} />
             <p className="text-sm text-[#EF4444] font-medium">
@@ -129,12 +134,13 @@ export default function ForecastPage() {
         </div>
       )}
 
-      {/* Chart */}
-      <div className="border border-border p-8">
-        <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-6">Top 10 - Predicted vs Baseline</h2>
+      {/* Chart — Escalation-ranked (significant hotspots only) */}
+      <div className="border border-border p-8" id="escalation-chart">
+        <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-1">Top 10 Escalations — Predicted vs Baseline</h2>
+        <p className="text-[10px] text-text-secondary/60 mb-6 font-light">Ranked by escalation score (change % × baseline volume). Only hotspots with baseline {'>'} 15 shown.</p>
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={top10} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+            <BarChart data={topEscalations} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2F333D" vertical={false} />
               <XAxis dataKey="hotspot_id" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 12 }} />
               <YAxis stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 12 }} />
@@ -143,40 +149,105 @@ export default function ForecastPage() {
                 contentStyle={{ backgroundColor: '#1B1D24', borderColor: '#2F333D', color: '#F9FAFB' }}
               />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
-              <Bar dataKey="predicted_count" name="Predicted" fill="#6366F1" />
-              <Bar dataKey="baseline_count" name="Baseline (8w)" fill="#374151" />
+              <Bar dataKey="predicted_count" name="Predicted (W02-W05 avg)" fill="#6366F1" />
+              <Bar dataKey="baseline_count" name="Baseline (W01-W05 avg)" fill="#374151" />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="border border-border overflow-hidden">
+      {/* Table — same data as chart (topEscalations), single source of truth */}
+      <div className="border border-border overflow-hidden" id="escalation-table">
         <table className="w-full text-sm text-left">
           <thead className="text-[10px] text-text-secondary uppercase tracking-[0.2em] font-medium border-b border-border bg-text-primary/5">
             <tr>
-              <th className="px-8 py-6">Hotspot</th>
-              <th className="px-8 py-6">Station</th>
-              <th className="px-8 py-6 text-right">Predicted</th>
-              <th className="px-8 py-6 text-right">Baseline</th>
-              <th className="px-8 py-6 text-right">Change</th>
+              <th className="px-6 py-6">Hotspot</th>
+              <th className="px-6 py-6">Station</th>
+              <th className="px-6 py-6 text-right">Predicted</th>
+              <th className="px-6 py-6 text-right">Baseline</th>
+              <th className="px-6 py-6 text-right">Delta</th>
+              <th className="px-6 py-6 text-right">Change</th>
+              <th className="px-6 py-6 text-center">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {forecast.map((row: any) => (
-              <tr key={row.hotspot_id} className="hover:bg-text-primary/5 transition-colors">
-                <td className="px-8 py-6 font-light text-text-primary">{row.hotspot_id}</td>
-                <td className="px-8 py-6 text-text-secondary">{row.police_station}</td>
-                <td className="px-8 py-6 text-right font-light text-text-primary">{row.predicted_count?.toFixed(1)}</td>
-                <td className="px-8 py-6 text-right font-light text-text-secondary">{row.baseline_count?.toFixed(0)}</td>
-                <td className={`px-8 py-6 text-right font-light ${row.change_pct > 0 ? 'text-critical' : 'text-patrol'}`}>
-                  {row.change_pct > 0 ? '+' : ''}{row.change_pct?.toFixed(1)}%
+            {topEscalations.map((row: any) => (
+              <tr key={row.hotspot_id} className={`hover:bg-text-primary/5 transition-colors ${row.is_escalating ? 'bg-[#EF4444]/5' : ''}`}>
+                <td className="px-6 py-6 font-light text-text-primary">{row.hotspot_id}</td>
+                <td className="px-6 py-6 text-text-secondary">{row.police_station}</td>
+                <td className="px-6 py-6 text-right font-light text-text-primary">{row.predicted_count?.toFixed(1)}</td>
+                <td className="px-6 py-6 text-right font-light text-text-secondary">{row.baseline_count}</td>
+                <td className={`px-6 py-6 text-right font-light ${(row.count_delta ?? 0) > 0 ? 'text-critical' : 'text-patrol'}`}>
+                  {(row.count_delta ?? 0) > 0 ? '+' : ''}{row.count_delta ?? 0}
+                </td>
+                <td className={`px-6 py-6 text-right font-light ${row.change_pct > 0 ? 'text-critical' : 'text-patrol'}`}>
+                  {row.change_pct != null ? `${row.change_pct > 0 ? '+' : ''}${row.change_pct?.toFixed(1)}%` : '\u2014'}
+                </td>
+                <td className="px-6 py-6 text-center">
+                  {row.is_escalating ? (
+                    <span className="text-[10px] uppercase tracking-wider font-bold text-[#EF4444] bg-[#EF4444]/10 px-2 py-1 rounded">Critical</span>
+                  ) : row.trend_label === 'rising' ? (
+                    <span className="text-[10px] uppercase tracking-wider font-medium text-amber-400 bg-amber-400/10 px-2 py-1 rounded">Rising</span>
+                  ) : row.trend_label === 'declining' ? (
+                    <span className="text-[10px] uppercase tracking-wider font-medium text-patrol bg-patrol/10 px-2 py-1 rounded">Declining</span>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wider font-medium text-text-secondary bg-text-primary/5 px-2 py-1 rounded">Stable</span>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Full Volume-Ranked List (expandable) */}
+      <details className="border border-border">
+        <summary className="px-8 py-6 cursor-pointer text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary hover:text-text-primary transition-colors">
+          All Hotspots by Volume ({forecast.length} total)
+        </summary>
+        <div className="overflow-hidden">
+          <table className="w-full text-sm text-left">
+            <thead className="text-[10px] text-text-secondary uppercase tracking-[0.2em] font-medium border-b border-border bg-text-primary/5">
+              <tr>
+                <th className="px-6 py-4">Hotspot</th>
+                <th className="px-6 py-4">Station</th>
+                <th className="px-6 py-4 text-right">Predicted</th>
+                <th className="px-6 py-4 text-right">Baseline</th>
+                <th className="px-6 py-4 text-right">Delta</th>
+                <th className="px-6 py-4 text-right">Change</th>
+                <th className="px-6 py-4 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {forecast.map((row: any) => (
+                <tr key={row.hotspot_id} className="hover:bg-text-primary/5 transition-colors">
+                  <td className="px-6 py-4 font-light text-text-primary">{row.hotspot_id}</td>
+                  <td className="px-6 py-4 text-text-secondary">{row.police_station}</td>
+                  <td className="px-6 py-4 text-right font-light text-text-primary">{row.predicted_count?.toFixed(1)}</td>
+                  <td className="px-6 py-4 text-right font-light text-text-secondary">{row.baseline_count}</td>
+                  <td className={`px-6 py-4 text-right font-light ${(row.count_delta ?? 0) > 0 ? 'text-critical' : 'text-patrol'}`}>
+                    {(row.count_delta ?? 0) > 0 ? '+' : ''}{row.count_delta ?? 0}
+                  </td>
+                  <td className={`px-6 py-4 text-right font-light ${row.change_pct > 0 ? 'text-critical' : 'text-patrol'}`}>
+                    {row.change_pct != null ? `${row.change_pct > 0 ? '+' : ''}${row.change_pct?.toFixed(1)}%` : '\u2014'}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    {row.is_escalating ? (
+                      <span className="text-[10px] uppercase tracking-wider font-bold text-[#EF4444] bg-[#EF4444]/10 px-2 py-1 rounded">Critical</span>
+                    ) : row.trend_label === 'rising' ? (
+                      <span className="text-[10px] uppercase tracking-wider font-medium text-amber-400 bg-amber-400/10 px-2 py-1 rounded">Rising</span>
+                    ) : row.trend_label === 'declining' ? (
+                      <span className="text-[10px] uppercase tracking-wider font-medium text-patrol bg-patrol/10 px-2 py-1 rounded">Declining</span>
+                    ) : (
+                      <span className="text-[10px] uppercase tracking-wider font-medium text-text-secondary bg-text-primary/5 px-2 py-1 rounded">Stable</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </div>
   );
 }
