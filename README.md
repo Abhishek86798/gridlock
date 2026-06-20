@@ -1,214 +1,189 @@
-# Bengaluru Illegal-Parking Intelligence — PS1
+# Trinetra: Bengaluru Illegal Parking Intelligence
 
-> **Hackathon:** AI-driven traffic solutions · Flipkart × Bengaluru Traffic Police  
-> **Problem statement:** PS1 — Poor Visibility on Parking-Induced Congestion  
-> **Round 2 deadline:** 21 June 2026 · Onsite finale: 3 July 2026, Flipkart HQ
+**Transforming reactive traffic enforcement into a predictive, targeted operation.**
 
----
+<!-- TODO: Add build, license, and tech stack badges here -->
 
-## What this solves
+## Demo
 
-BTP today enforces illegal parking **reactively** — patrols roam and ticket whatever they find.
-This system turns five months of violation logs into a **predictive enforcement layer**:
+<!-- TODO: Add live demo link here --> [Live Demo](#)
+<!-- TODO: Add demo video/GIF here -->
 
-1. **Detect** where illegal parking clusters (spatial hotspot detection)
-2. **Score** how badly each hotspot hurts traffic flow (interpretable risk index)
-3. **Forecast** when the next spike will hit (gradient-boosting on temporal features)
-4. **Deploy** tell N patrol units exactly *where* and *when* to go (greedy set-cover optimizer)
+## Overview
 
----
+Trinetra solves the problem of poor visibility into parking induced congestion in Bengaluru. Currently, traffic police rely on reactive, roaming patrols with no systematic way to prioritize high impact areas. This system processes raw violation logs to detect spatial hotspots, quantify their congestion risk, and predict future spikes. By converting historical data into actionable intelligence, Trinetra enables law enforcement to deploy limited resources efficiently to the locations that matter most.
 
-## Quick start
+## Key Features
 
-```bash
-# 1. Clone and activate the virtual environment
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1          # Windows PowerShell
-# source .venv/bin/activate           # macOS / Linux
+*   **Geospatial Hotspot Detection:** Uses DBSCAN clustering to identify dense groupings of illegal parking violations from raw coordinate data.
+*   **Predictive Forecasting:** Implements an XGBoost model and Rolling Mean baseline to forecast violation spikes across specific hour blocks and days of the week.
+*   **Advanced Patrol Routing (TSP Optimizer):** Dynamically groups 3 to 5 high priority hotspots into mathematically optimal patrol loops using a greedy Nearest Neighbor algorithm to maximize coverage.
+*   **Repeat Offender Tracking:** Aggregates and anonymizes vehicle plate data to highlight chronic violators and their preferred locations.
+*   **Interactive Operations Dashboard:** A Next.js frontend featuring a React Leaflet live map, deployment tables, temporal heatmaps, and POI spillover statistics.
 
-# 2. Install dependencies
-pip install -r requirements.txt
+## Architecture
 
-# 3. Place the raw dataset
-#    Copy the provided CSV to:
-#    data/raw/violations.csv
+```mermaid
+flowchart TD
+    A[Raw Violations CSV] --> B[Data Pipeline / ETL]
+    B -->|DBSCAN Clustering| C(hotspots.feather)
+    B -->|Feature Engineering| D(temporal.feather)
+    B -->|Aggregation| E(repeat_offenders.feather)
+    
+    C --> F[FastAPI Backend]
+    D --> F
+    E --> F
+    
+    F -->|XGBoost Inference| G[Forecast Service]
+    F -->|Greedy TSP| H[Patrol Optimizer Service]
+    
+    F <-->|REST API| I[Next.js Frontend]
+    I --> J[Live Map Visualization]
+    I --> K[Deployment Dashboard]
+```
 
-## Running Locally
+The system is split into three main phases. First, an offline Python data pipeline ingests raw CSV logs, clusters coordinates, and precomputes artifacts into lightweight `.feather` files. Second, a FastAPI backend loads these artifacts into memory to serve REST endpoints and execute on the fly logic like patrol route optimization and XGBoost forecasting. Finally, a Next.js client consumes these APIs to render interactive maps and dashboards for the end user.
 
-The easiest way to run the full stack is using the single run script:
+## Tech Stack
+
+| Layer | Technology | Why it's used |
+| :--- | :--- | :--- |
+| **Data Engineering** | Python, pandas, scikit-learn | Efficient processing of 100k+ rows, DBSCAN clustering, and `.feather` file generation. |
+| **Backend API** | FastAPI, Uvicorn | High performance REST API serving with automated OpenAPI schema generation and Pydantic validation. |
+| **Machine Learning** | XGBoost | Provides robust gradient boosted regression for temporal violation forecasting. |
+| **Frontend Framework** | Next.js (App Router), React | Server side rendering capabilities and modern component based UI architecture. |
+| **Mapping & UI** | React Leaflet, Tailwind CSS | Interactive geospatial visualization of hotspots and rapid UI styling. |
+
+## Folder Structure
+
+```text
+gridlock/
+|-- backend/
+|   |-- app/                  # FastAPI application, routers, schemas, and ML services
+|   |-- data/                 # Raw datasets and compiled .feather artifacts
+|   `-- pipeline/             # Python scripts for cleaning data and extracting features
+|-- docs/                     # Project requirements and context documentation
+|-- frontend_v2/              # Next.js web application and React components
+|   |-- src/app/              # Route pages (Dashboard, Forecast, Map, Deploy, Offenders)
+|   |-- src/components/       # Reusable UI elements (Sidebar, LiveMap, PriorityTable)
+|   `-- src/lib/              # API client for backend communication
+|-- notebooks/                # Jupyter notebooks for Exploratory Data Analysis (EDA)
+`-- requirements.txt          # Python dependency lockfile
+```
+
+## Getting Started
+
+### Prerequisites
+*   Python 3.11+
+*   Node.js 18+
+*   npm or yarn
+
+### Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd gridlock
+    ```
+
+2.  **Set up the backend:**
+    ```bash
+    python -m venv .venv
+    # On Windows: .venv\Scripts\activate
+    # On macOS/Linux: source .venv/bin/activate
+    pip install -r requirements.txt
+    ```
+
+3.  **Set up the frontend:**
+    ```bash
+    cd frontend_v2
+    npm install
+    ```
+
+### Environment Variables
+Create a `.env` file in the root or appropriate directories.
+
+*   `NEXT_PUBLIC_API_URL`=<!-- TODO: fill in -->
+
+### How to Run Locally
+
+You can use the provided bash script to run both servers concurrently:
 ```bash
 ./run.sh
 ```
-This will:
-1. Verify raw data exists.
-2. Run the data pipeline (skips if data is already processed; use `./run.sh --force` to rebuild).
-3. Start the FastAPI backend and wait for it to be healthy.
-4. Start the Streamlit frontend.
 
-### Manual Startup
+Alternatively, run them separately:
 
-If you prefer to start services manually:
-
-**1. Process Data** (one-time or when raw data changes)
+**Backend:**
 ```bash
-python backend/pipeline/build_dataset.py
-python backend/pipeline/precompute.py
+# From the gridlock root
+uvicorn backend.app.main:app --port 8000 --reload
 ```
 
-**2. Start Backend**
+**Frontend:**
 ```bash
-uvicorn backend.app.main:app --reload
-```
-
-**3. Start Frontend (Next.js - Trinetra UI)** (in a separate terminal)
-```bash
-cd frontend_v2
-npm install
+# From the frontend_v2 directory
 npm run dev
 ```
-Open **http://localhost:3000** in a browser.
 
-### Streamlit Fallback (If Node/NPM is unavailable)
-If the Next.js build fails or NPM is not installed, you can run the legacy Streamlit UI. It connects to the exact same backend API and provides identical data:
-```bash
-streamlit run frontend/app.py
-```
-Open **http://localhost:8501** in a browser.
+Access the application at `http://localhost:3000`.
 
-> **Demo fallback:** if the pipeline hasn't run yet, set `USE_MOCK = True` in
-> `frontend/services/api_client.py` and run `python mocks/make_sample_parquet.py`
-> to generate synthetic data. The dashboard loads instantly.
+## API Reference
 
----
+The backend exposes several REST endpoints. Below are the core routes:
 
-## Repo layout
+*   `GET /hotspots`
+    *   **Query Params:** `limit` (int), `police_station` (str), `vehicle_type` (str), `min_risk` (int)
+    *   **Response:** Array of Hotspot objects containing coordinates, risk scores, and violation counts.
+*   `GET /patrol`
+    *   **Query Params:** `units` (int)
+    *   **Response:** Object containing `coverage_pct` and an array of `assignments`. Each assignment includes the unit ID, anchor hotspot, temporal window, and optimal `route` array.
+*   `GET /forecast`
+    *   **Query Params:** `target_date` (str)
+    *   **Response:** Forecast context (week start/end, data cutoff) and an array of predicted violation counts per hour block.
+*   `GET /temporal/{hotspot_id}`
+    *   **Response:** Hourly and daily violation distributions for building heatmaps.
+*   `GET /repeat-offenders`
+    *   **Query Params:** `limit` (int)
+    *   **Response:** Array of anonymized vehicles with high violation counts and their top locations.
 
-```
-parking-intel/
-├── data/
-│   ├── raw/violations.csv          # provided dataset — never edited
-│   └── processed/                  # pipeline writes parquets here
-├── backend/
-│   ├── app/                        # FastAPI application
-│   │   ├── main.py                 # server entry point
-│   │   ├── core/config.py          # paths, risk-score weights (edit here to tune)
-│   │   ├── models/schemas.py       # Pydantic — mirrors API contract exactly
-│   │   ├── routers/                # hotspots.py + analytics.py
-│   │   └── services/               # business logic (hotspot, analytics)
-│   ├── pipeline/
-│   │   ├── build_dataset.py        # Step 1: clean + feature-engineer → violations.parquet
-│   │   └── precompute.py           # Step 2: cluster → hotspots + temporal + forecast + patrol
-│   └── db/                         # DuckDB loader (optional)
-├── frontend/
-│   ├── app.py                      # streamlit run frontend/app.py
-│   ├── services/api_client.py      # all backend calls (USE_MOCK flag here)
-│   └── components/                 # map_view, priority_table, filters
-├── mocks/
-│   ├── hotspots.sample.json        # hand-written sample matching API contract
-│   └── make_sample_parquet.py      # generates synthetic processed/*.parquet
-├── notebooks/
-│   └── 01_eda.ipynb                # exploratory analysis — run first
-├── deck/                           # pitch deck + architecture diagram
-├── CONTRACTS.md                    # ML↔Backend↔Frontend data contract
-├── PROJECT_CONTEXT.md
-└── REQUIREMENTS.md
-```
+## Screenshots
 
----
+<!-- TODO: Add screenshot of [Dashboard Home] here -->
+*(Showcases the primary overview metrics and the main interface layout)*
 
-## Pipeline steps
+<!-- TODO: Add screenshot of [Live Map with Patrol Routes] here -->
+*(Highlights the geospatial clustering, risk color coding, and the dashed green TSP patrol routes)*
 
-| Script | Input | Output | Notes |
-|---|---|---|---|
-| `build_dataset.py` | `data/raw/violations.csv` | `violations.parquet` | Clean, parse arrays, convert to IST, filter approved |
-| `precompute.py` | `violations.parquet` | `hotspots.parquet`, `temporal.parquet`, `forecast.parquet`, `repeat_offenders.parquet` | Run after build_dataset |
+<!-- TODO: Add screenshot of [Deployment Optimizer] here -->
+*(Displays the generated priority table and the unit assignment sliders)*
 
----
+<!-- TODO: Add screenshot of [Repeat Offenders Analytics] here -->
+*(Shows the PII masked vehicle table and associated metrics)*
 
-## API endpoints
+## Results & Metrics
 
-Base URL: `http://localhost:8000`
+*   **Model Performance:** <!-- TODO: Add XGBoost model accuracy / RMSE / MAE here -->
+*   **Coverage Efficiency:** Deploys effectively target over <!-- TODO: Add optimal coverage percentage here -->% of high risk priority score areas with only 5 units.
 
-| Endpoint | Returns |
-|---|---|
-| `GET /hotspots` | Hotspots for the map, colored by risk score |
-| `GET /priority` | Ranked enforcement queue with unit recommendations |
-| `GET /heatmap` | Lightweight point weights for the heatmap layer |
-| `GET /temporal/{id}` | Hour × weekday matrix for one hotspot |
-| `GET /stats` | Summary counts for header cards |
-| `GET /forecast` | Next-window predicted violation intensity |
-| `GET /patrol?units=N` | Greedy patrol assignments for N units |
-| `GET /repeat-offenders` | Chronic-offender frequency table |
-| `GET /enforcement-quality` | Rejection rates by station / device |
+## Roadmap
 
-All list endpoints accept `?start_date`, `end_date`, `police_station`, `vehicle_type`, `violation_type`.
+*   Implement a real time ingestion pipeline using Kafka to handle streaming violation data rather than static CSV parsing.
+*   Add localized authentication for station chiefs to access customized deployment views.
+*   Expand the POI spillover tagging to dynamically fetch bounds from OpenStreetMap APIs.
 
----
+## Contributing
 
-## Risk score formula
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-```
-risk_score = (severity_score  × 0.40)
-           + (density_score   × 0.25)
-           + (vehicle_score   × 0.20)
-           + (junction_bonus  × 0.15)
+## License
 
-Clamped to 0–100. Weights are tunable in backend/app/core/config.py.
-```
+<!-- TODO: choose a license -->
 
-| Component | Source | High-score signal |
-|---|---|---|
-| `severity_score` | violation_type → `SEVERITY_WEIGHTS` | PARKING IN A MAIN ROAD (3.0×) |
-| `density_score` | violation count in cluster | Large cluster |
-| `vehicle_score` | vehicle_type → `VEHICLE_WEIGHTS` | Tanker/truck (3.0×) |
-| `junction_bonus` | `junction_name` not null | Named junction present |
+## Contact
 
----
-
-## Dataset notes
-
-- Source: HackerEarth PS1 dataset (Jan–Apr 2024, ~298k rows)
-- `vehicle_number` is **anonymised** (`FKN00GL*` synthetic IDs) — frequency stats are valid, real-world identity is not claimed
-- No direct traffic-flow measurement exists; `risk_score` is a **derived proxy index**, not a measured value
-- `created_datetime` is **UTC** — all temporal features are converted to **IST (+5:30)** before analysis
-- `validation_status` has three actionable values: `approved` (core analysis), `rejected` (enforcement-quality add-on), `null` (unvalidated, excluded)
-
----
-
-## Judging criteria map
-
-| Criterion | Where to look |
-|---|---|
-| **Robustness** | `build_dataset.py` — null handling, bbox filter, IST conversion, array parsing |
-| **Innovation** | Forecast model (`/forecast`), patrol optimizer (`/patrol`), junction + POI tagging |
-| **Prototype clarity** | Live dashboard, explainable risk score formula above, this README |
-| **Scalability** | `device_id` column supports live device feeds; architecture diagram in `deck/` |
-| **Real-world viability** | BTP-aligned outputs: patrol assignments, peak windows, station-level views |
-
----
-
-## Development status
-
-- [x] Repo scaffold + environment
-- [x] Raw data in place
-- [x] Central config (`core/config.py`)
-- [x] EDA notebook (`notebooks/01_eda.ipynb`)
-- [ ] `build_dataset.py` — cleaning pipeline
-- [ ] `precompute.py` — hotspot detection + risk score
-- [ ] Temporal analysis
-- [ ] Forecast model
-- [ ] Patrol optimizer
-- [ ] Dashboard components
-- [ ] Pitch deck
-
----
-
-## Requirements
-
-- Python 3.11+
-- See `requirements.txt` for pinned versions
-- No GPU required; all models run on CPU
-
----
-
-*Built for the Flipkart × BTP AI Traffic Hackathon, Round 2.*
+<!-- TODO: Add author contact information here -->
