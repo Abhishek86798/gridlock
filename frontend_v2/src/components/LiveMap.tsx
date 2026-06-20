@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, useMap } from "react-leaflet";
+import { Search } from "lucide-react";
 import "leaflet/dist/leaflet.css";
+import { useWatchlist } from "@/lib/hooks/useWatchlist";
 
 const TIER_COLORS: Record<string, string> = {
   Critical: "#EF4444",
@@ -10,12 +12,39 @@ const TIER_COLORS: Record<string, string> = {
   Standard: "#3B82F6",
 };
 
+// Child component to handle programmatic map flying
+function MapController({ flyToTarget }: { flyToTarget: [number, number] | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (flyToTarget) {
+      map.flyTo(flyToTarget, 16, { duration: 1.5 });
+    }
+  }, [flyToTarget, map]);
+  return null;
+}
+
 export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { hotspots: any[], assignments?: any[], highlightPoi?: string | null }) {
   const [mounted, setMounted] = useState(false);
+  const { watchlist } = useWatchlist();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [flyToTarget, setFlyToTarget] = useState<[number, number] | null>(null);
+  const [highlightedSearchId, setHighlightedSearchId] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    const found = hotspots.find(hs => hs.hotspot_id.toLowerCase() === searchQuery.trim().toLowerCase());
+    if (found) {
+      setFlyToTarget([found.lat, found.lng]);
+      setHighlightedSearchId(found.hotspot_id);
+    } else {
+      alert(`Hotspot ${searchQuery} not found on this map.`);
+    }
+  };
 
   if (!mounted) return <div className="h-[600px] w-full bg-bg-surface animate-pulse rounded-xl border border-border flex items-center justify-center text-text-muted">Loading map...</div>;
 
@@ -47,6 +76,7 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
         className="w-full h-full z-0"
         zoomControl={false}
       >
+        <MapController flyToTarget={flyToTarget} />
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
@@ -59,6 +89,8 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
           let radius = Math.max(5, hs.risk_score / 8);
 
           const isAssigned = assignedHotspotIds.has(hs.hotspot_id);
+          const isPinned = watchlist.includes(hs.hotspot_id);
+          const isSearched = highlightedSearchId === hs.hotspot_id;
 
           // Apply POI highlighting logic if a category is selected
           if (highlightPoi) {
@@ -73,13 +105,29 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
               weight = 0;
             }
           }
+          
+          // Watchlist pinning takes higher visual priority
+          if (isPinned && !highlightPoi) {
+            color = "#06B6D4"; // Cyan
+            fillOpacity = 1;
+            radius = radius + 4;
+            weight = 3;
+          }
+          
+          // Searched hotspot takes the absolute highest visual priority
+          if (isSearched) {
+            color = "#F5F5DC"; // Beige
+            fillOpacity = 1;
+            radius = radius + 6; // Make it extra large
+            weight = 4; // Thick border
+          }
 
           return (
             <div key={hs.hotspot_id}>
               <CircleMarker
                 center={[hs.lat, hs.lng]}
                 pathOptions={{
-                  color: highlightPoi && hs.poi_category === highlightPoi ? "#F0ABFC" : color, // Lighter border for matches
+                  color: isSearched ? "#FFFFFF" : ((highlightPoi && hs.poi_category === highlightPoi) ? "#F0ABFC" : (isPinned && !highlightPoi ? "#67E8F9" : color)), 
                   fillColor: color,
                   fillOpacity: fillOpacity,
                   weight: weight,
@@ -121,6 +169,20 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
                       </span>
                     </div>
                   )}
+                  {isPinned && (
+                    <div className="mt-2 border-t border-border pt-2">
+                      <span className="inline-block px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-cyan-900/40 text-cyan-400 border border-cyan-500/50">
+                        Pinned from Repeat Offenders
+                      </span>
+                    </div>
+                  )}
+                  {isSearched && (
+                    <div className="mt-2 border-t border-border pt-2">
+                      <span className="inline-block px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-[#F5F5DC]/20 text-[#F5F5DC] border border-[#F5F5DC]/50">
+                        Searched Result
+                      </span>
+                    </div>
+                  )}
                 </div>
               </Popup>
             </CircleMarker>
@@ -159,6 +221,20 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
         })}
       </MapContainer>
       
+      {/* Search Bar Overlay */}
+      <div className="absolute top-6 left-6 z-[1000]">
+        <form onSubmit={handleSearch} className="flex items-center bg-black/80 backdrop-blur border border-border p-2 rounded shadow-2xl transition-all focus-within:border-text-primary/30">
+          <Search size={16} className="text-text-secondary ml-2 mr-3" />
+          <input
+            type="text"
+            placeholder="Search Hotspot (e.g. HS-0064)"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="bg-transparent border-none outline-none text-sm font-light text-text-primary placeholder:text-text-muted w-[240px]"
+          />
+        </form>
+      </div>
+
       {/* Legend */}
       <div className="absolute bottom-6 right-6 bg-black/80 backdrop-blur border border-border p-4 z-[1000]">
         <div className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.2em] mb-4">Risk Tier</div>

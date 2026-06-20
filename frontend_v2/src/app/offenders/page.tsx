@@ -2,11 +2,29 @@
 
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
-import { Users, AlertTriangle, MapPin, Hash } from "lucide-react";
+import { Users, AlertTriangle, MapPin, Hash, CheckCircle2 } from "lucide-react";
+import { useWatchlist } from "@/lib/hooks/useWatchlist";
 
 export default function RepeatOffendersPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const { watchlist, toggleWatchlist } = useWatchlist();
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handlePin = (hotspotId: string) => {
+    if (!hotspotId) return;
+    toggleWatchlist(hotspotId);
+    
+    const isNowPinned = !watchlist.includes(hotspotId);
+    if (isNowPinned) {
+      setToastMessage(`${hotspotId} pinned! View it on the Live Map.`);
+    } else {
+      setToastMessage(`${hotspotId} removed from Live Map.`);
+    }
+    
+    // Hide toast after 3 seconds
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   useEffect(() => {
     fetchApi("/repeat-offenders", { limit: 50 }).then((res) => {
@@ -43,6 +61,14 @@ export default function RepeatOffendersPage() {
           exposed.
         </p>
       </header>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-8 right-8 z-50 bg-bg-surface border border-border text-text-primary px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+          <CheckCircle2 size={18} className="text-emerald-500" />
+          <span className="text-sm font-medium tracking-wide">{toastMessage}</span>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -154,7 +180,20 @@ export default function RepeatOffendersPage() {
                   {row.top_location}
                 </td>
                 <td className="px-8 py-6 text-text-secondary font-light">
-                  {row.top_hotspot}
+                  {row.top_hotspot ? (
+                    <button 
+                      onClick={() => handlePin(row.top_hotspot)}
+                      className={`px-3 py-1.5 rounded transition-colors text-xs font-medium tracking-widest uppercase border ${
+                        watchlist.includes(row.top_hotspot) 
+                          ? 'bg-fuchsia-900/40 text-fuchsia-400 border-fuchsia-500/50' 
+                          : 'bg-text-primary/5 hover:bg-text-primary/10 border-border'
+                      }`}
+                    >
+                      {watchlist.includes(row.top_hotspot) ? 'Pinned' : 'Pin'} {row.top_hotspot}
+                    </button>
+                  ) : (
+                    "-"
+                  )}
                 </td>
                 <td className="px-8 py-6 text-right text-text-primary font-light">
                   {row.distinct_locations}
