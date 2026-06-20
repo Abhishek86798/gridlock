@@ -81,6 +81,7 @@ class StatsResponse(BaseModel):
     by_vehicle_type: dict[str, int]
     by_violation_type: dict[str, int]
     by_police_station: dict[str, int]
+    blind_spot_pct: Optional[float] = None
 
 
 # ── Add-on: POI / Spillover stats ──────────────────────────────────────────────────

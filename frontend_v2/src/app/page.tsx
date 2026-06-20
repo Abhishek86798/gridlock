@@ -28,8 +28,8 @@ export default async function OverviewPage({
   const totalViolations = stats?.total_violations || 0;
   const totalHotspots = stats?.total_hotspots || 0;
   
-  // Dummy blind spot avg for now
-  const blindAvg = 66;
+  // Dynamic blind spot avg from backend (fallback to 0 if missing)
+  const blindAvg = stats?.blind_spot_pct || 0;
 
   return (
     <div className="p-12 max-w-7xl mx-auto space-y-12 bg-bg-base min-h-screen">

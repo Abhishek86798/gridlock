@@ -25,7 +25,13 @@ def get_stats():
         raise HTTPException(503, "Artifacts not loaded yet")
 
     dt_col = "created_ist" if "created_ist" in vdf.columns else "created_datetime"
-    dates  = vdf[dt_col].dropna()
+    dates_raw  = vdf[dt_col].dropna()
+    dates = pd.to_datetime(dates_raw, format="mixed", errors="coerce").dropna()
+    
+    blind_spot_pct = 0.0
+    if len(dates):
+        mask = (dates.dt.hour >= 13) & (dates.dt.hour <= 16)
+        blind_spot_pct = round(float(mask.sum()) / len(dates) * 100, 1)
 
     return StatsResponse(
         total_violations=int(len(vdf)),
@@ -37,6 +43,7 @@ def get_stats():
         by_vehicle_type=vdf["vehicle_type"].value_counts().head(20).to_dict(),
         by_violation_type=vdf["primary_violation_type"].value_counts().head(20).to_dict(),
         by_police_station=vdf["police_station"].value_counts().head(20).to_dict(),
+        blind_spot_pct=blind_spot_pct,
     )
 
 
