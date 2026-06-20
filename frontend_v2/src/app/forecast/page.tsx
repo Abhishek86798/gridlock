@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { getForecast } from "@/lib/api";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { X, AlertTriangle } from "lucide-react";
 
 export default function ForecastPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
 
   useEffect(() => {
     getForecast(25).then((res) => {
@@ -30,6 +32,7 @@ export default function ForecastPage() {
   
   const rising = forecast.filter((f: any) => f.change_pct > 10).length;
   const falling = forecast.filter((f: any) => f.change_pct < -10).length;
+  const escalatingHotspots = forecast.filter((f: any) => f.is_escalating);
 
   return (
     <div className="p-12 max-w-7xl mx-auto space-y-12 bg-bg-base min-h-screen">
@@ -70,21 +73,59 @@ export default function ForecastPage() {
         </div>
       </div>
 
-      {/* Escalation Alerts */}
-      {forecast.filter((f: any) => f.is_escalating).length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">Action Required</h2>
-          {forecast.filter((f: any) => f.is_escalating).map((hs: any) => (
-            <div key={hs.hotspot_id} className="bg-[#EF4444]/10 border border-[#EF4444]/30 p-4 rounded flex items-start gap-3">
-              <span className="text-xl">⚠️</span>
-              <div>
-                <p className="text-sm font-medium text-[#EF4444]">Escalation Alert</p>
-                <p className="text-sm font-light text-text-primary mt-1">
-                  <strong>{hs.police_station}</strong> hotspot predicted to rise <strong>{hs.change_pct}%</strong> vs baseline — consider reviewing this week's patrol assignment for <strong>{hs.hotspot_id}</strong>.
-                </p>
-              </div>
+      {/* Escalation Summary Banner */}
+      {escalatingHotspots.length > 0 && (
+        <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 p-4 rounded flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="text-[#EF4444]" size={20} />
+            <p className="text-sm text-[#EF4444] font-medium">
+              Action Required: {escalatingHotspots.length} hotspots are predicted to surge {'>'}20%.
+            </p>
+          </div>
+          <button 
+            onClick={() => setIsAlertModalOpen(true)}
+            className="text-xs uppercase tracking-wider font-bold bg-[#EF4444]/20 hover:bg-[#EF4444]/30 text-[#EF4444] px-4 py-2 rounded transition-colors"
+          >
+            View Alerts
+          </button>
+        </div>
+      )}
+
+      {/* Alert Modal */}
+      {isAlertModalOpen && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-bg-surface border border-border rounded-xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[80vh]">
+            <div className="p-6 border-b border-border flex justify-between items-center">
+              <h2 className="text-lg font-light tracking-tight text-text-primary flex items-center gap-2">
+                <AlertTriangle className="text-[#EF4444]" size={20} />
+                ESCALATION ALERTS
+              </h2>
+              <button onClick={() => setIsAlertModalOpen(false)} className="text-text-muted hover:text-text-primary transition-colors">
+                <X size={20} />
+              </button>
             </div>
-          ))}
+            <div className="p-6 overflow-y-auto space-y-4">
+              {escalatingHotspots.map((hs: any) => (
+                <div key={hs.hotspot_id} className="bg-[#EF4444]/10 border border-[#EF4444]/30 p-4 rounded-lg flex items-start gap-3">
+                  <span className="text-xl">⚠️</span>
+                  <div>
+                    <p className="text-sm font-medium text-[#EF4444]">Escalation Alert</p>
+                    <p className="text-sm font-light text-text-primary mt-1">
+                      <strong>{hs.police_station}</strong> hotspot predicted to rise <strong>{hs.change_pct}%</strong> vs baseline — consider reviewing this week's patrol assignment for <strong>{hs.hotspot_id}</strong>.
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="p-6 border-t border-border bg-bg-base rounded-b-xl flex justify-end">
+              <button 
+                onClick={() => setIsAlertModalOpen(false)}
+                className="text-sm font-medium text-text-primary bg-text-primary/10 hover:bg-text-primary/20 px-6 py-2 rounded transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
