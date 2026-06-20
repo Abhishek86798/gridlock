@@ -30,9 +30,19 @@ while ! curl -s http://127.0.0.1:8000/ > /dev/null; do
 done
 echo "Backend is up!"
 
-# 4. Frontend
-echo "[4/4] Starting Streamlit frontend..."
-streamlit run frontend/app.py
+# 4. Frontend (Next.js v2 - Trinetra)
+echo "[4/4] Starting Trinetra Next.js frontend..."
+cd frontend_v2
+if [ ! -d "node_modules" ]; then
+    echo "Installing Node dependencies..."
+    npm install
+fi
+echo "Building Next.js app..."
+npm run build
+echo "Starting Next.js server..."
+npm start &
+FRONTEND_PID=$!
 
 # Cleanup on exit
-kill $BACKEND_PID
+trap "kill $BACKEND_PID $FRONTEND_PID" EXIT
+wait

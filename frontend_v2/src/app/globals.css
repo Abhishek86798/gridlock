@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg-base: #000000;
+  --color-bg-surface: #000000;
+  --color-bg-elevated: #0A0A0A;
+  --color-border: #1A1A1A;
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #A3A3A3;
+  --color-text-muted: #525252;
+  --color-critical: #FFFFFF;
+  --color-elevated: #A3A3A3;
+  --color-standard: #525252;
+  --color-patrol: #FFFFFF;
+  --color-accent: #FFFFFF;
+}
+
+:root {
+  color-scheme: dark;
+  --background: #000000;
+  --foreground: #FFFFFF;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  @apply antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2F333D;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4B5563;
+}
+
+/* Leaflet Popup Dark Mode Overrides */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #000000 !important;
+  color: #FFFFFF !important;
+  border: 1px solid #1A1A1A !important;
+  border-radius: 0 !important;
+}
+.leaflet-popup-close-button {
+  color: #A3A3A3 !important;
+}
+.leaflet-popup-close-button:hover {
+  color: #FFFFFF !important;
+}

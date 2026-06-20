@@ -60,11 +60,19 @@ python backend/pipeline/precompute.py
 uvicorn backend.app.main:app --reload
 ```
 
-**3. Start Frontend** (in a separate terminal)
+**3. Start Frontend (Next.js - Trinetra UI)** (in a separate terminal)
+```bash
+cd frontend_v2
+npm install
+npm run dev
+```
+Open **http://localhost:3000** in a browser.
+
+### Streamlit Fallback (If Node/NPM is unavailable)
+If the Next.js build fails or NPM is not installed, you can run the legacy Streamlit UI. It connects to the exact same backend API and provides identical data:
 ```bash
 streamlit run frontend/app.py
 ```
-
 Open **http://localhost:8501** in a browser.
 
 > **Demo fallback:** if the pipeline hasn't run yet, set `USE_MOCK = True` in
