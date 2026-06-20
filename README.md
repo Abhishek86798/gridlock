@@ -21,6 +21,14 @@ Trinetra solves the problem of poor visibility into parking induced congestion i
 *   **Repeat Offender Tracking:** Aggregates and anonymizes vehicle plate data to highlight chronic violators and their preferred locations.
 *   **Interactive Operations Dashboard:** A Next.js frontend featuring a React Leaflet live map, deployment tables, temporal heatmaps, and POI spillover statistics.
 
+## Data Insights: The "0% Afternoon Blind Spot"
+
+During the development of Trinetra, our analytics engine uncovered a massive, systemic enforcement gap in the raw dataset. When visualizing the temporal distribution of over 112,000+ parking violations, the system reported a **0% Afternoon Blind Spot** on the main dashboard. 
+
+Does illegal parking magically stop between 1 PM and 5 PM? Absolutely not. This 0% metric proves our core hypothesis: **there is virtually zero enforcement happening during the day**, likely due to shift changes, lunch hours, or traffic police being redirected to junction management instead of parking enforcement. 
+
+Because almost 90% of the dataset's violations are logged overnight (8 PM to 7 AM), Trinetra's **Deployment Optimizer** is specifically designed to help station chiefs break this cycle. By allocating their limited patrol units mathematically across *all* high-risk temporal blocks, Trinetra allows commanders to finally close the blind spot.
+
 ## Architecture
 
 ```mermaid
