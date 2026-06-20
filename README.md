@@ -33,17 +33,46 @@ pip install -r requirements.txt
 #    Copy the provided CSV to:
 #    data/raw/violations.csv
 
-# 4. Run the ML pipeline  (writes data/processed/*.parquet)
+## Running Locally
+
+The easiest way to run the full stack is using the single run script:
+```bash
+./run.sh
+```
+This will:
+1. Verify raw data exists.
+2. Run the data pipeline (skips if data is already processed; use `./run.sh --force` to rebuild).
+3. Start the FastAPI backend and wait for it to be healthy.
+4. Start the Streamlit frontend.
+
+### Manual Startup
+
+If you prefer to start services manually:
+
+**1. Process Data** (one-time or when raw data changes)
+```bash
 python backend/pipeline/build_dataset.py
 python backend/pipeline/precompute.py
-
-# 5. Start the API
-uvicorn backend.app.main:app --reload --port 8000
-
-# 6. Launch the dashboard  (new terminal)
-streamlit run frontend/app.py
 ```
 
+**2. Start Backend**
+```bash
+uvicorn backend.app.main:app --reload
+```
+
+**3. Start Frontend (Next.js - Trinetra UI)** (in a separate terminal)
+```bash
+cd frontend_v2
+npm install
+npm run dev
+```
+Open **http://localhost:3000** in a browser.
+
+### Streamlit Fallback (If Node/NPM is unavailable)
+If the Next.js build fails or NPM is not installed, you can run the legacy Streamlit UI. It connects to the exact same backend API and provides identical data:
+```bash
+streamlit run frontend/app.py
+```
 Open **http://localhost:8501** in a browser.
 
 > **Demo fallback:** if the pipeline hasn't run yet, set `USE_MOCK = True` in

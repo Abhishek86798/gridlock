@@ -99,7 +99,7 @@ Cleaned/feature-engineered rows. Backend uses for drill-down/stats.
 | `lat`, `lng` | float | coordinates |
 | `violation_type` | string | single primary type (exploded) |
 | `vehicle_type` | string | normalized |
-| `vehicle_number` | string | plate (PII — handle carefully) |
+| `vehicle_number` | string | pre-anonymized vehicle ID (`FKN00GL*` format, not a real plate) |
 | `police_station` | string | station |
 | `junction_name` | string \| null | junction |
 | `created_at` | datetime | ISO, tz-aware |
@@ -130,7 +130,7 @@ Returns hotspots for the map.
     {
       "hotspot_id": "HS001",
       "lat": 12.9255567, "lng": 77.618665,
-      "risk_score": 87.4,
+      "risk_score": 62.5,
       "violation_count": 142,
       "dominant_violation": "PARKING IN A MAIN ROAD",
       "dominant_vehicle": "CAR",
@@ -151,10 +151,10 @@ Ranked enforcement queue (hotspots sorted by risk_score, with a unit suggestion)
     {
       "rank": 1,
       "hotspot_id": "HS001",
-      "risk_score": 87.4,
-      "peak_window": "Mon–Fri 18:00–21:00",
+      "risk_score": 62.5,
+      "peak_window": "Mon–Fri 08:00–11:00",
       "police_station": "Madiwala",
-      "recommended_units": 2
+      "recommended_units": 1
     }
   ]
 }

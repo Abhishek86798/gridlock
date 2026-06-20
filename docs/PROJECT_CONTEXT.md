@@ -47,7 +47,7 @@ One row = one logged illegal-parking violation. Key columns and what they unlock
 | `violation_type` | List, e.g. `["WRONG PARKING","PARKING IN A MAIN ROAD"]` | **Severity signal** — main-road / near-crossing parking hurts flow most |
 | `offence_code` | Numeric codes e.g. `[112,104]` | Structured violation category |
 | `vehicle_type` | CAR, SCOOTER, AUTO, TANKER, etc. | Bigger vehicle = more carriageway blocked |
-| `vehicle_number` | Plate number | **Repeat-offender** tracking |
+| `vehicle_number` | Pre-anonymized vehicle ID (format: `FKN00GL*`, not a real plate) | **Repeat-offender** tracking |
 | `created_datetime` | When logged | Time-of-day / day-of-week patterns; forecasting |
 | `validation_status` | approved / rejected | Data quality + ground truth on legitimacy |
 | `closed_datetime`, `action_taken_timestamp` | Resolution timing | Response analysis (often NULL — use with care) |

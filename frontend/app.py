@@ -1,43 +1,42 @@
 """
 Gridlock Parking Intelligence — Streamlit dashboard.
-
-Run from the repo root:
-    streamlit run frontend/app.py
-
-Requires backend:
-    uvicorn backend.app.main:app --port 8000
 """
 import sys
 from pathlib import Path
 
-# Make `services.*` importable regardless of working directory.
 sys.path.insert(0, str(Path(__file__).parent))
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
 from components import filters as filter_component
 from components import map_view, priority_table
 from services import api_client
-
-st.set_page_config(
-    page_title="Gridlock — Bengaluru Parking Intelligence",
-    page_icon="🚦",
-    layout="wide",
+from styles import (
+    COLORS,
+    dark_altair,
+    inject_css,
+    kpi_card,
+    kpi_row,
+    panel_header,
 )
 
+st.set_page_config(page_title="Gridlock", layout="wide")
+
+inject_css()
+
+# ── Temporal heatmap (fragment) ───────────────────────────────────────────────
 
 @st.fragment
-def render_temporal_heatmap(police_station: str | None, vehicle_type: str | None = None) -> None:
+def render_temporal_heatmap(police_station, vehicle_type):
     hotspots_data = api_client.get_hotspots(
-        police_station=police_station,
-        vehicle_type=vehicle_type,
-        limit=200,
+        police_station=police_station, vehicle_type=vehicle_type, limit=200
     )
     hotspots = hotspots_data.get("hotspots", [])
     hs_ids = [hs["hotspot_id"] for hs in hotspots]
     if not hs_ids:
-        st.info("No hotspots match the current filters.")
+        st.info("No hotspots match filters.")
         return
 
     selected_id = st.selectbox("Select Hotspot", hs_ids, key="temporal_hs")
@@ -53,313 +52,117 @@ def render_temporal_heatmap(police_station: str | None, vehicle_type: str | None
     )
     pivot.columns = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     pivot.index.name = "Hour"
-    st.write(f"Violation count by hour × weekday for **{selected_id}**")
-    st.dataframe(
-        pivot.style.background_gradient(cmap="OrRd"),
-        use_container_width=True,
-    )
 
-    hs_row = next((h for h in hotspots if h["hotspot_id"] == selected_id), None)
-    if hs_row:
-        pm_pct = hs_row["afternoon_log_pct"]
-        am_pct = hs_row["morning_log_pct"]
-        st.info(
-            f"**{selected_id}** — morning logging: {am_pct:.0f}% | "
-            f"afternoon logging: {pm_pct:.0f}%"
-            + (" ⚠️ Afternoon blind spot" if pm_pct < 5 else "")
-        )
+    st.markdown(f'<div style="color:#D1D5DB; font-size:13px; margin-bottom:12px;">Violation count by hour × weekday for <b>{selected_id}</b></div>', unsafe_allow_html=True)
+    st.dataframe(pivot.style.background_gradient(cmap="Blues"), use_container_width=True)
 
-# ── Backend health check ───────────────────────────────────────────────────────
+# ── Health check ─────────────────────────────────────────────────────────────
 if not api_client.health():
-    st.error(
-        "Backend not reachable at http://localhost:8000. "
-        "Start it with: `uvicorn backend.app.main:app --port 8000`"
-    )
+    st.error("Backend not reachable at http://localhost:8000.")
     st.stop()
 
-# ── Sidebar filters ────────────────────────────────────────────────────────────
+# ── Sidebar ──────────────────────────────────────────────────────────────────
 active_filters = filter_component.render()
 
-# ── Header metrics ─────────────────────────────────────────────────────────────
+# ── KPIs ─────────────────────────────────────────────────────────────────────
 stats = api_client.get_stats()
 if stats:
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Total Violations", f"{stats.get('total_violations', 0):,}")
-    c2.metric("Hotspot Zones", f"{stats.get('total_hotspots', 0):,}")
-
     by_station = stats.get("by_police_station", {})
     top_station = max(by_station, key=by_station.get) if by_station else "—"
-    c3.metric("Busiest Station", top_station)
 
     by_vehicle = stats.get("by_vehicle_type", {})
     top_vehicle = max(by_vehicle, key=by_vehicle.get) if by_vehicle else "—"
-    c4.metric("Top Vehicle Type", top_vehicle)
 
-    # Blind-spot story: fraction of hotspots with <5% afternoon logging.
     stations_data = api_client.get_stations()
     stations_rows = stations_data.get("stations", [])
-    if stations_rows:
-        blind_avg = sum(s["blind_spot_pct"] for s in stations_rows) / len(stations_rows)
-        c5.metric(
-            "Afternoon Blind Spot",
-            f"{blind_avg:.0f}%",
-            help="% of hotspot zones with <5% of logs after 3 PM — city has near-zero PM enforcement coverage.",
-        )
+    blind_avg = (
+        sum(s["blind_spot_pct"] for s in stations_rows) / len(stations_rows)
+        if stations_rows else 0
+    )
 
-    dr = stats.get("date_range", {})
-    st.caption(f"Dataset: {dr.get('start', '?')} → {dr.get('end', '?')}")
+    sparkline = '<svg width="60" height="20" viewBox="0 0 60 20" fill="none" stroke="#60A5FA" stroke-width="1.5"><path d="M0 15 L10 10 L20 18 L30 8 L40 12 L50 4 L60 8"/></svg>'
+    circle = f'<svg width="40" height="40" viewBox="0 0 36 36"><path stroke-dasharray="{blind_avg}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#60A5FA" stroke-width="3"/><text x="18" y="20.35" font-family="Inter" font-size="9" fill="#FFF" font-weight="bold" text-anchor="middle">{blind_avg:.0f}%</text></svg>'
 
-st.markdown("---")
+    kpi_row(
+        kpi_card("Total Violations", f"{stats.get('total_violations', 0):,}", "shield", sparkline),
+        kpi_card("Hotspot Zones", f"{stats.get('total_hotspots', 0):,}", "map_pin"),
+        kpi_card("Busiest Station", top_station, "building"),
+        kpi_card("Afternoon Blind Spot", f"{blind_avg:.0f}%", "eye", circle),
+    )
 
-# ── Map + Priority side by side ────────────────────────────────────────────────
-col_map, col_table = st.columns([3, 2])
+# ── Map + Priority ───────────────────────────────────────────────────────────
+c1, c2 = st.columns([6, 4], gap="medium")
 
-with col_map:
+with c1:
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown(panel_header("Hotspot Map"), unsafe_allow_html=True)
     map_view.render(active_filters)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-with col_table:
+with c2:
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown(panel_header("Enforcement Priority Queue"), unsafe_allow_html=True)
     priority_table.render(active_filters)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown("---")
-
-# ── Tabs: Forecast | Patrol Deployment | POI Spillover | Temporal | Stations | Junctions ──────────
-tab_forecast, tab_patrol, tab_poi, tab_temporal, tab_stations, tab_junctions = st.tabs(
-    ["🔮 Tomorrow's Hotspots", "🚓 Patrol Deployment", "🏙️ POI Spillover", "Temporal Heatmap", "By Police Station", "By Junction"]
-)
+# ── Tabs ─────────────────────────────────────────────────────────────────────
+(
+    tab_forecast, tab_patrol, tab_poi, tab_temporal, tab_stations, tab_junctions
+) = st.tabs([
+    "Forecast", "Patrol Deployment", "POI Spillover", "Temporal", "By Station", "By Junction"
+])
 
 with tab_forecast:
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown(panel_header("Forecast"), unsafe_allow_html=True)
     _fc = api_client.get_forecast(top_n=25)
-    fc_items = _fc.get("forecast", [])
-    if not fc_items:
-        st.warning(
-            "Forecast not available. Ensure the backend is running and "
-            "parquet artifacts exist (`python -m backend.pipeline.precompute`)."
-        )
-    else:
-        pw  = _fc.get("predict_week", "?")
-        mae = _fc.get("model_mae", 0.0)
-
-        # ── headline metrics row ─────────────────────────────────────────────────
-        fm1, fm2, fm3, fm4 = st.columns(4)
-        fm1.metric("📅 Forecast Week", pw)
-        fm2.metric("📊 Model MAE", f"{mae:.1f} violations/hotspot")
-
-        df_fc = pd.DataFrame(fc_items)
-        rising = (df_fc["change_pct"] > 10).sum()
-        falling = (df_fc["change_pct"] < -10).sum()
-        fm3.metric("🔺 Rising Hotspots  (≥10%)", int(rising))
-        fm4.metric("🔻 Falling Hotspots (≤10%)", int(falling))
-
-        st.caption(
-            f"**Methodology**: XGBoost (count:poisson) trained on lag×4, "
-            f"4-week rolling mean, ISO week seasonality, risk score, junction & POI flags. "
-            f"2-week time-based hold-out. Prediction grain: ISO week **{pw}**."
-        )
-
-        # ── badge column + styled table ───────────────────────────────────────
-        def _trend_badge(pct: float) -> str:
-            if pct > 20:
-                return "🔥 Spiking"
-            if pct > 5:
-                return "⬆️ Rising"
-            if pct < -20:
-                return "✅ Dropping fast"
-            if pct < -5:
-                return "⬇️ Easing"
-            return "➡️ Stable"
-
-        df_fc["Trend"] = df_fc["change_pct"].apply(_trend_badge)
-        df_display = df_fc[[
-            "hotspot_id", "police_station",
-            "predicted_count", "prev_week_count", "change_pct",
-            "risk_score", "Trend",
-        ]].copy()
-        df_display.columns = [
-            "Hotspot", "Police Station",
-            "Predicted Count", "Last Week", "Change %",
-            "Risk Score", "Trend",
-        ]
-        df_display = df_display.sort_values("Predicted Count", ascending=False).reset_index(drop=True)
-        df_display.index += 1  # rank starts at 1
-
-        st.dataframe(
-            df_display.style
-                .background_gradient(subset=["Predicted Count", "Risk Score"], cmap="YlOrRd")
-                .background_gradient(subset=["Change %"], cmap="RdYlGn_r")
-                .format({"Predicted Count": "{:.1f}", "Last Week": "{:.0f}",
-                         "Change %": "{:+.1f}%", "Risk Score": "{:.1f}"}),
-            use_container_width=True,
-        )
-
-        # ── bar chart: top 10 by predicted count ──────────────────────────────────
-        st.write("**Top 10 hotspots — next-week predicted violations**")
-        top10 = df_display.head(10).reset_index(drop=True)
-        st.bar_chart(
-            top10.set_index("Hotspot")[["Predicted Count", "Last Week"]],
-            use_container_width=True,
-        )
+    if _fc and _fc.get("forecast"):
+        df_fc = pd.DataFrame(_fc["forecast"])
+        df_display = df_fc[["hotspot_id", "police_station", "predicted_count", "baseline_count", "risk_score"]].copy()
+        st.dataframe(df_display.style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]), use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with tab_patrol:
-    st.write("### 🚓 Patrol Deployment Optimizer")
-    st.write(
-        "Assign N patrol units to maximize high-priority coverage. "
-        "Uses greedy spatial de-bunching to prevent units from overlapping "
-        "within 1km of each other."
-    )
-    
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown(panel_header("Patrol Deployment"), unsafe_allow_html=True)
     units_to_deploy = active_filters.get("patrol_units", 0)
-    if units_to_deploy == 0:
-        st.info("👈 Use the **Patrol Deployment** slider in the sidebar to assign units and view the coverage curve.")
-    else:
+    if units_to_deploy > 0:
         patrol_data = api_client.get_patrol(units=units_to_deploy)
-        if not patrol_data or not patrol_data.get("assignments"):
-            st.warning("Patrol data not available. Ensure backend is running.")
-        else:
-            cov_pct = patrol_data.get("coverage_pct", 0.0)
-            naive_pct = patrol_data.get("naive_coverage_pct")
-            improvement = patrol_data.get("improvement_pct")
-            assignments = patrol_data.get("assignments", [])
-            coverage_curve = patrol_data.get("coverage_curve", [])
-
-            cols = st.columns(4 if improvement is not None else 2)
-            cols[0].metric("Units Assigned", len(assignments))
-            cols[1].metric("Priority Coverage", f"{cov_pct:.1f}%")
-            if naive_pct is not None and improvement is not None:
-                cols[2].metric("Naive Baseline", f"{naive_pct:.1f}%")
-                cols[3].metric("Improvement", f"+{improvement:.1f}%",
-                               help="Coverage gain over naive top-N-by-count baseline")
-
-            if coverage_curve:
-                df_curve = pd.DataFrame(coverage_curve)
-                st.write("**Coverage vs. Units Deployed**")
-                st.line_chart(df_curve.set_index("units")["coverage_pct"], use_container_width=True)
-
-            df_patrol = pd.DataFrame(assignments)
-            if not df_patrol.empty:
-                df_patrol = df_patrol.rename(columns={
-                    "unit_id": "Unit ID",
-                    "hotspot_id": "Hotspot ID",
-                    "time_window": "Time Window",
-                    "risk_score": "Risk Score",
-                })
-                st.write("**Deployment Roster**")
-                st.dataframe(df_patrol, use_container_width=True, hide_index=True)
-
+        if patrol_data and patrol_data.get("assignments"):
+            st.dataframe(pd.DataFrame(patrol_data["assignments"]).style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]), use_container_width=True, hide_index=True)
+    else:
+        st.info("Assign units using the Deployment slider in the control panel.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with tab_poi:
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown(panel_header("POI Spillover"), unsafe_allow_html=True)
     _poi = api_client.get_poi_stats()
     by_cat = _poi.get("by_category", [])
-    tagged = _poi.get("tagged_hotspots", 0)
-    untagged = _poi.get("untagged_hotspots", 0)
-    total_hs = tagged + untagged
-
-    if not by_cat:
-        st.info(
-            "POI tags not available yet. Re-run the pipeline:\n"
-            "`python -m backend.pipeline.precompute --steps hotspots`"
-        )
-    else:
-        # ── headline pitch line ──────────────────────────────────────────────────
-        tagged_pct = tagged / total_hs * 100 if total_hs else 0
-        top_cat_row = max(by_cat, key=lambda r: r["hotspot_count"])
-        st.success(
-            f"⚠️ **{tagged_pct:.0f}% of hotspot zones** are near a metro station, "
-            f"commercial hub, bus stop, or sensitive facility. "
-            f"The largest spillover category is **{top_cat_row['poi_category']}** "
-            f"({top_cat_row['hotspot_count']} zones, "
-            f"{top_cat_row['pct_of_hotspots']:.0f}% of all hotspots)."
-        )
-
-        # ── headline metrics ────────────────────────────────────────────────────────────────
-        pm1, pm2, pm3 = st.columns(3)
-        pm1.metric("📍 Tagged Hotspots", tagged, help="Hotspots with at least one POI keyword match")
-        pm2.metric("❓ Untagged", untagged)
-        pm3.metric("📊 Tag Coverage", f"{tagged_pct:.0f}%")
-
-        # ── per-category breakdown table ────────────────────────────────────────────────
-        _CAT_EMOJI = {
-            "sensitive":  "🏫",
-            "metro":      "🚇",
-            "commercial": "🛍️",
-            "transit":    "🚌",
-        }
-        df_poi = pd.DataFrame(by_cat)
-        df_poi["Category"] = df_poi["poi_category"].map(
-            lambda c: f"{_CAT_EMOJI.get(c, '')} {c.title()}"
-        )
-        df_poi = df_poi.rename(columns={
-            "hotspot_count":    "Hotspots",
-            "total_violations": "Violations",
-            "avg_risk_score":   "Avg Risk",
-            "pct_of_hotspots":  "% of All Hotspots",
-        })[["Category", "Hotspots", "Violations", "Avg Risk", "% of All Hotspots"]]
-
-        st.dataframe(
-            df_poi.style
-                .background_gradient(subset=["Hotspots", "Avg Risk"], cmap="YlOrRd")
-                .format({"Avg Risk": "{:.1f}", "% of All Hotspots": "{:.1f}%",
-                         "Violations": "{:,}"}),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        # ── bar chart ────────────────────────────────────────────────────────────────────
-        st.write("**Violations per POI category**")
-        st.bar_chart(
-            df_poi.set_index("Category")[["Violations", "Hotspots"]],
-            use_container_width=True,
-        )
-
-        st.caption(
-            "**Method**: Keyword match on `location` + `junction_name` columns. "
-            "Categories: `sensitive` (school/hospital), `metro`, `commercial` "
-            "(mall/market/bazaar), `transit` (bus stop/stand). "
-            "Priority order: sensitive → metro → commercial → transit. "
-            "No external datasets used — PS1-compliant."
-        )
+    if by_cat:
+        st.dataframe(pd.DataFrame(by_cat).style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]), use_container_width=True, hide_index=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with tab_temporal:
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown(panel_header("Temporal Distribution"), unsafe_allow_html=True)
     render_temporal_heatmap(active_filters.get("police_station"), active_filters.get("vehicle_type"))
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with tab_stations:
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown(panel_header("Stations"), unsafe_allow_html=True)
     stations = api_client.get_stations()
     rows = stations.get("stations", [])
     if rows:
-        df_st = pd.DataFrame(rows)[[
-            "police_station", "hotspot_count", "total_violations",
-            "avg_risk_score", "max_risk_score", "blind_spot_pct",
-            "dominant_violation", "top_hotspot_id",
-        ]]
-        df_st.columns = [
-            "Station", "Hotspots", "Violations",
-            "Avg Risk", "Max Risk", "Blind Spot %",
-            "Top Violation", "Top Hotspot",
-        ]
-        st.caption(
-            f"{len(df_st)} stations · city-wide afternoon blind-spot avg: "
-            f"{df_st['Blind Spot %'].mean():.0f}%"
-        )
-        st.dataframe(
-            df_st.style.background_gradient(subset=["Avg Risk", "Blind Spot %"], cmap="YlOrRd"),
-            use_container_width=True,
-            hide_index=True,
-        )
+        st.dataframe(pd.DataFrame(rows).style.set_properties(**{'text-align': 'center'}).set_table_styles([dict(selector='th', props=[('text-align', 'center')])]), use_container_width=True, hide_index=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with tab_junctions:
+    st.markdown('<div class="panel-card">', unsafe_allow_html=True)
+    st.markdown(panel_header("Junctions"), unsafe_allow_html=True)
     junctions = api_client.get_junctions(min_violations=50)
     rows = junctions.get("junctions", [])
     if rows:
-        df_jn = pd.DataFrame(rows)[[
-            "junction_name", "total_violations", "hotspot_count",
-            "avg_risk_score", "police_station", "top_hotspot_id",
-        ]]
-        df_jn.columns = [
-            "Junction", "Violations", "Hotspots",
-            "Avg Risk", "Station", "Top Hotspot",
-        ]
-        st.caption(f"{len(df_jn)} named junctions with ≥ 50 violations")
-        st.dataframe(
-            df_jn.style.background_gradient(subset=["Avg Risk"], cmap="YlOrRd"),
-            use_container_width=True,
-            hide_index=True,
-        )
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.markdown('</div>', unsafe_allow_html=True)

@@ -105,6 +105,20 @@ def get_priority(
         df = df[df["dominant_vehicle"].str.contains(vehicle_type, case=False, na=False)]
     df = df.sort_values("risk_score", ascending=False).head(limit).reset_index(drop=True)
 
+    # Recommend priority tier based on the hotspot's percentile rank in the full dataset.
+    # P90 = ~50.65, P95 = ~54.64, max = 69.27.
+    # Top ~1% (risk >= P99) get Critical; top ~10% (risk >= P90) get Elevated; rest get Standard.
+    all_scores = store.hotspots["risk_score"]
+    p90 = float(all_scores.quantile(0.90))
+    p99 = float(all_scores.quantile(0.99))
+
+    def _tier(score: float) -> str:
+        if score >= p99:
+            return "Critical"
+        if score >= p90:
+            return "Elevated"
+        return "Standard"
+
     items = [
         {
             "rank": i + 1,
@@ -112,8 +126,9 @@ def get_priority(
             "risk_score": row["risk_score"],
             "logging_window": row["logging_window"],
             "police_station": row["police_station"],
-            "recommended_units": max(1, int(row["risk_score"] // 30)),
+            "priority_tier": _tier(float(row["risk_score"])),
         }
         for i, (_, row) in enumerate(df.iterrows())
     ]
     return PriorityResponse(priority=items)
+
