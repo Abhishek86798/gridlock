@@ -25,6 +25,16 @@ function DeployContent() {
   const coverageCurve = data?.coverage_curve || [];
   const covPct = data?.coverage_pct || 0;
 
+  if (loading) {
+    return (
+      <div className="p-12 max-w-7xl mx-auto min-h-screen flex items-center justify-center">
+        <div className="text-text-secondary animate-pulse tracking-[0.2em] uppercase font-light text-sm">
+          Calculating optimal deployment routes...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-12 max-w-7xl mx-auto space-y-12 bg-bg-base min-h-screen">
       <header className="space-y-4">
