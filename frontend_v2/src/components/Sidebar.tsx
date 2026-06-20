@@ -149,34 +149,28 @@ export function Sidebar() {
         </div>
 
         <div className="space-y-3">
-          <div className="flex justify-between items-baseline">
-            <label className="text-[9px] font-medium text-text-secondary uppercase tracking-[0.15em] block">Min Risk Score</label>
-            <span className="text-xs font-light text-text-primary">{minRisk}</span>
-          </div>
+          <label className="text-[9px] font-medium text-text-secondary uppercase tracking-[0.15em] block">Min Risk Score</label>
           <input 
-            type="range" 
+            type="number" 
             min="0" 
-            max="65" 
-            step="5"
+            max="100" 
+            step="1"
             value={minRisk}
             onChange={(e) => updateFilter("risk", e.target.value)}
-            className="w-full accent-text-primary"
+            className="w-full bg-transparent border border-border rounded-none px-4 py-3 text-xs text-text-primary focus:outline-none focus:border-text-secondary"
           />
         </div>
 
         <div className="space-y-3 pb-8">
-          <div className="flex justify-between items-baseline">
-            <label className="text-[9px] font-medium text-text-secondary uppercase tracking-[0.15em] block">Patrol Units</label>
-            <span className="text-xs font-light text-text-primary">{searchParams.get("units") || "20"}</span>
-          </div>
+          <label className="text-[9px] font-medium text-text-secondary uppercase tracking-[0.15em] block">Patrol Units</label>
           <input 
-            type="range" 
-            min="0" 
+            type="number" 
+            min="1" 
             max="100" 
             step="1"
             value={searchParams.get("units") || "20"}
             onChange={(e) => updateFilter("units", e.target.value)}
-            className="w-full accent-text-primary"
+            className="w-full bg-transparent border border-border rounded-none px-4 py-3 text-xs text-text-primary focus:outline-none focus:border-text-secondary"
           />
         </div>
 
