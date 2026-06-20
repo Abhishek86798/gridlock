@@ -1,8 +1,0 @@
-{
-  "total_violations": 10532,
-  "total_hotspots": 64,
-  "date_range": { "start": "2023-11-11", "end": "2023-12-26" },
-  "by_vehicle_type": { "CAR": 4210, "SCOOTER": 3980, "AUTO": 1000 },
-  "by_violation_type": { "NO PARKING": 6100, "WRONG PARKING": 3200, "PARKING IN A MAIN ROAD": 1232 },
-  "by_police_station": { "Madiwala": 980, "Shivajinagar": 870, "Indiranagar": 500 }
-}
