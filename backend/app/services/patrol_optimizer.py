@@ -72,29 +72,71 @@ def optimize_patrol(units: int) -> PatrolResponse:
         grp = tdf[tdf["hotspot_id"] == hid]
         time_window = _format_peak_window(grp) if not grp.empty else row.get("logging_window", "all_day")
             
-        # Assign unit to this hotspot
+        lat1, lng1 = row["lat"], row["lng"]
+        route = [hid]
+        route_geometry = [[lat1, lng1]]
+        
+        # 2a. Find up to 4 other high-priority hotspots nearby to form a route
+        candidates = []
+        for check_idx, check_row in work_df.iterrows():
+            if check_idx in covered_indices or check_idx == idx:
+                continue
+                
+            c_lat, c_lng = check_row["lat"], check_row["lng"]
+            dist_to_anchor = _haversine(lat1, lng1, c_lat, c_lng)
+            if dist_to_anchor <= 2000.0:  # Within 2km of anchor
+                candidates.append((check_idx, check_row))
+                
+        # Sort candidates by priority and take top 4
+        candidates.sort(key=lambda x: x[1]["priority"], reverse=True)
+        top_candidates = candidates[:4]
+        
+        # 2b. Order the route using greedy Nearest Neighbor
+        stops_to_visit = [(c[0], c[1]) for c in top_candidates]
+        current_lat, current_lng = lat1, lng1
+        
+        while stops_to_visit:
+            best_dist = float('inf')
+            best_stop = None
+            best_stop_idx = -1
+            
+            for i, (c_idx, c_row) in enumerate(stops_to_visit):
+                d = _haversine(current_lat, current_lng, c_row["lat"], c_row["lng"])
+                if d < best_dist:
+                    best_dist = d
+                    best_stop = (c_idx, c_row)
+                    best_stop_idx = i
+                    
+            c_idx, c_row = best_stop
+            route.append(c_row["hotspot_id"])
+            route_geometry.append([c_row["lat"], c_row["lng"]])
+            current_lat, current_lng = c_row["lat"], c_row["lng"]
+            stops_to_visit.pop(best_stop_idx)
+
+        # Assign unit to this route
         assignments.append(
             PatrolAssignment(
                 unit_id=unit_id,
                 hotspot_id=hid,
                 time_window=time_window,
-                risk_score=row["risk_score"]
+                risk_score=row["risk_score"],
+                route=route,
+                route_geometry=route_geometry
             )
         )
         
-        # Mark this hotspot and nearby ones as covered
-        lat1, lng1 = row["lat"], row["lng"]
-        
-        for check_idx, check_row in work_df.iterrows():
-            if check_idx in covered_indices:
-                continue
+        # 2c. Mark everything within _COVERAGE_RADIUS_M of ANY point on the route as covered
+        for pt_lat, pt_lng in route_geometry:
+            for check_idx, check_row in work_df.iterrows():
+                if check_idx in covered_indices:
+                    continue
+                    
+                lat2, lng2 = check_row["lat"], check_row["lng"]
+                dist = _haversine(pt_lat, pt_lng, lat2, lng2)
                 
-            lat2, lng2 = check_row["lat"], check_row["lng"]
-            dist = _haversine(lat1, lng1, lat2, lng2)
-            
-            if dist <= _COVERAGE_RADIUS_M:
-                covered_indices.add(check_idx)
-                covered_priority += check_row["priority"]
+                if dist <= _COVERAGE_RADIUS_M:
+                    covered_indices.add(check_idx)
+                    covered_priority += check_row["priority"]
         
         current_cov_pct = round(covered_priority / total_priority * 100, 1)
         coverage_curve.append(CoverageCurvePoint(units=unit_id, coverage_pct=current_cov_pct))

@@ -16,7 +16,7 @@ export default async function MapPage({
   const hotspots = await getHotspots(filters);
   const units = parseInt(params.units || "0", 10);
   const patrolData = units > 0 ? await getPatrol(units) : null;
-  const assignments = patrolData?.assignments?.map((a: any) => a.hotspot_id) || [];
+  const assignments = patrolData?.assignments || [];
 
   return (
     <div className="w-full h-screen bg-bg-base p-8">

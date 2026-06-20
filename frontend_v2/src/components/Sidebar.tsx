@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LayoutDashboard, Map, TrendingUp, ShieldAlert, GitMerge, MapPin, Building2, Filter } from "lucide-react";
+import { LayoutDashboard, Map, TrendingUp, ShieldAlert, GitMerge, MapPin, Building2, Filter, Users } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { useEffect, useState, useCallback } from "react";
@@ -69,6 +69,7 @@ export function Sidebar() {
     { href: "/temporal", label: "Temporal Dist.", icon: Filter },
     { href: "/stations", label: "Stations", icon: Building2 },
     { href: "/junctions", label: "Junctions", icon: GitMerge },
+    { href: "/offenders", label: "Repeat Offenders", icon: Users },
   ];
 
   return (

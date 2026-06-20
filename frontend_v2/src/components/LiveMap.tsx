@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 const TIER_COLORS: Record<string, string> = {
@@ -10,7 +10,7 @@ const TIER_COLORS: Record<string, string> = {
   Standard: "#3B82F6",
 };
 
-export default function LiveMap({ hotspots, assignments = [] }: { hotspots: any[], assignments?: string[] }) {
+export default function LiveMap({ hotspots, assignments = [] }: { hotspots: any[], assignments?: any[] }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -29,6 +29,16 @@ export default function LiveMap({ hotspots, assignments = [] }: { hotspots: any[
     return "Standard";
   }
 
+  // Pre-compute all hotspot IDs that are part of ANY route
+  const assignedHotspotIds = new Set<string>();
+  assignments.forEach((a) => {
+    if (a.route) {
+      a.route.forEach((id: string) => assignedHotspotIds.add(id));
+    } else if (a.hotspot_id) {
+      assignedHotspotIds.add(a.hotspot_id);
+    }
+  });
+
   return (
     <div className="h-full w-full overflow-hidden relative z-0 rounded-2xl border border-border">
       <MapContainer
@@ -45,7 +55,7 @@ export default function LiveMap({ hotspots, assignments = [] }: { hotspots: any[
           const tier = getTier(hs.risk_score);
           const color = TIER_COLORS[tier];
           const radius = Math.max(5, hs.risk_score / 8);
-          const isAssigned = assignments.includes(hs.hotspot_id);
+          const isAssigned = assignedHotspotIds.has(hs.hotspot_id);
 
           return (
             <div key={hs.hotspot_id}>
@@ -105,6 +115,23 @@ export default function LiveMap({ hotspots, assignments = [] }: { hotspots: any[
               />
             )}
             </div>
+          );
+        })}
+
+        {/* Draw Patrol Routes */}
+        {assignments.map((assignment, idx) => {
+          if (!assignment.route_geometry || assignment.route_geometry.length < 2) return null;
+          return (
+            <Polyline
+              key={`route-${idx}`}
+              positions={assignment.route_geometry}
+              pathOptions={{
+                color: "#10B981", // Patrol green
+                weight: 4,
+                opacity: 0.8,
+                dashArray: "8 8",
+              }}
+            />
           );
         })}
       </MapContainer>
