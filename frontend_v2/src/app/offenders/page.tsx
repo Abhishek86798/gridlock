@@ -198,7 +198,7 @@ export default function RepeatOffendersPage() {
           <tbody className="divide-y divide-border">
             {offenders.map((row: any, i: number) => (
               <tr
-                key={row.vehicle_number}
+                key={`${row.vehicle_number}-${i}`}
                 className="hover:bg-text-primary/5 transition-colors"
               >
                 <td className="px-8 py-6 text-text-muted">{i + 1}</td>
