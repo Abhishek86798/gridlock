@@ -460,6 +460,7 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
                 "count_delta":     delta,
                 "trend_label":     "emerging" if predicted > 5 else "insufficient history",
                 "risk_score":      round(float(row["risk_score"]), 1),
+                "is_escalating":   False,
             }
 
         pct = float(row["change_pct"])
@@ -474,6 +475,8 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         else:
             label = "declining"
 
+        is_escalating = bool(pct > 20 and prev > 15)
+
         return {
             "hotspot_id":      row["hotspot_id"],
             "police_station":  row["police_station"],
@@ -483,6 +486,7 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
             "count_delta":     delta,
             "trend_label":     label,
             "risk_score":      round(float(row["risk_score"]), 1),
+            "is_escalating":   is_escalating,
         }
 
     # Compute calendar date context for the prediction week

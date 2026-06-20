@@ -85,7 +85,7 @@ def get_junctions(
 
 @router.get("/forecast", response_model=ForecastResponse)
 def get_forecast(
-    top_n: int = Query(20, ge=1, le=100, description="Top-N hotspots to return ranked by predicted count"),
+    top_n: int = Query(20, ge=1, le=2000, description="Top-N hotspots to return ranked by predicted count"),
 ):
     """
     Predictive hotspot forecast — next ISO week.

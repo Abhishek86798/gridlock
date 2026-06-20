@@ -70,6 +70,24 @@ export default function ForecastPage() {
         </div>
       </div>
 
+      {/* Escalation Alerts */}
+      {forecast.filter((f: any) => f.is_escalating).length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">Action Required</h2>
+          {forecast.filter((f: any) => f.is_escalating).map((hs: any) => (
+            <div key={hs.hotspot_id} className="bg-[#EF4444]/10 border border-[#EF4444]/30 p-4 rounded flex items-start gap-3">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <p className="text-sm font-medium text-[#EF4444]">Escalation Alert</p>
+                <p className="text-sm font-light text-text-primary mt-1">
+                  <strong>{hs.police_station}</strong> hotspot predicted to rise <strong>{hs.change_pct}%</strong> vs baseline — consider reviewing this week's patrol assignment for <strong>{hs.hotspot_id}</strong>.
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Chart */}
       <div className="border border-border p-8">
         <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-6">Top 10 - Predicted vs Baseline</h2>

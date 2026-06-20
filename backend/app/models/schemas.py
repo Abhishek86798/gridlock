@@ -111,6 +111,7 @@ class ForecastItem(BaseModel):
     count_delta: Optional[int] = None    # raw predicted - baseline_count
     trend_label: Optional[str] = None    # "emerging" / "rising" / "stable" / "declining"
     risk_score: float        # static risk score for display / sorting
+    is_escalating: Optional[bool] = False
 
 
 class ForecastResponse(BaseModel):
