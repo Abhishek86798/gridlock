@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getPatrol } from "@/lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from "recharts";
+import { Download } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
 
@@ -24,6 +25,25 @@ function DeployContent() {
   const assignments = data?.assignments || [];
   const coverageCurve = data?.coverage_curve || [];
   const covPct = data?.coverage_pct || 0;
+
+  const exportCSV = () => {
+    if (!assignments.length) return;
+    const headers = ["Unit #", "Patrol Route", "Risk Score", "Window"];
+    const rows = assignments.map((row: any) => [
+      row.unit_id,
+      `"${row.route?.join(" -> ") || row.hotspot_id}"`, // quote to handle spaces and arrows
+      row.risk_score?.toFixed(1),
+      row.time_window
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `trinetra_patrol_roster_${units}_units.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (loading) {
     return (
@@ -76,8 +96,19 @@ function DeployContent() {
       </div>
 
       {/* Roster Table */}
-      <div className="border border-border overflow-hidden">
-        <table className="w-full text-sm text-left">
+      <div>
+        <div className="flex justify-between items-end mb-6">
+          <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">Assignments Roster</h2>
+          <button 
+            onClick={exportCSV}
+            disabled={!assignments.length}
+            className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-text-primary hover:text-white transition-colors bg-text-primary/5 hover:bg-text-primary/10 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 border border-border"
+          >
+            <Download size={14} /> Export CSV
+          </button>
+        </div>
+        <div className="border border-border overflow-hidden">
+          <table className="w-full text-sm text-left">
           <thead className="text-[10px] text-text-secondary uppercase tracking-[0.2em] font-medium border-b border-border bg-text-primary/5">
             <tr>
               <th className="px-8 py-6">Unit #</th>
