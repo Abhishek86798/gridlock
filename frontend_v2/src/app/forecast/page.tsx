@@ -15,7 +15,15 @@ export default function ForecastPage() {
     });
   }, []);
 
-  if (loading) return <div className="p-8 text-text-muted animate-pulse">Loading predictive models...</div>;
+  if (loading) {
+    return (
+      <div className="p-12 max-w-7xl mx-auto min-h-screen flex items-center justify-center">
+        <div className="text-text-secondary animate-pulse tracking-[0.2em] uppercase font-light text-sm">
+          Loading predictive models...
+        </div>
+      </div>
+    );
+  }
 
   const forecast = data?.forecast || [];
   const top10 = forecast.slice(0, 10);
