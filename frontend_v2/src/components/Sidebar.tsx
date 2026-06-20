@@ -25,7 +25,8 @@ export function Sidebar() {
   const station = searchParams.get("station") || "All stations";
   const vehicle = searchParams.get("vehicle") || "All types";
   const violation = searchParams.get("violation") || "All violations";
-  const minRisk = searchParams.get("risk") || "0";
+  const minRisk = searchParams.get("risk") ?? "0";
+  const units = searchParams.get("units") ?? "20";
 
   useEffect(() => {
     getStations().then((res) => {
@@ -168,7 +169,7 @@ export function Sidebar() {
             min="1" 
             max="100" 
             step="1"
-            value={searchParams.get("units") || "20"}
+            value={units}
             onChange={(e) => updateFilter("units", e.target.value)}
             className="w-full bg-transparent border border-border rounded-none px-4 py-3 text-xs text-text-primary focus:outline-none focus:border-text-secondary"
           />
