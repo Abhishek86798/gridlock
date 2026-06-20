@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, Polyline, useMap } from "react-leaflet";
-import { Search } from "lucide-react";
+import { Search, LocateFixed } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import { useWatchlist } from "@/lib/hooks/useWatchlist";
 
@@ -13,21 +13,58 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 // Child component to handle programmatic map flying
-function MapController({ flyToTarget }: { flyToTarget: [number, number] | null }) {
+function MapController({ flyConfig }: { flyConfig: { target: [number, number], zoom: number } | null }) {
   const map = useMap();
   useEffect(() => {
-    if (flyToTarget) {
-      map.flyTo(flyToTarget, 16, { duration: 1.5 });
+    if (flyConfig) {
+      map.flyTo(flyConfig.target, flyConfig.zoom, { duration: 1.5 });
     }
-  }, [flyToTarget, map]);
+  }, [flyConfig, map]);
   return null;
+}
+
+// Child component to handle dynamic grid panning and zooming
+function DynamicGridOverlay() {
+  const map = useMap();
+  const [transform, setTransform] = useState({ scale: 1, x: 0, y: 0 });
+
+  useEffect(() => {
+    const update = () => {
+      const zoom = map.getZoom();
+      const scale = Math.pow(2, zoom - 12); // Base zoom level is 12
+      const bounds = map.getPixelBounds();
+      setTransform({ scale, x: -bounds.min.x, y: -bounds.min.y });
+    };
+    
+    map.on('move', update);
+    map.on('zoom', update);
+    update(); // Initial calculation
+    
+    return () => { 
+      map.off('move', update);
+      map.off('zoom', update);
+    };
+  }, [map]);
+
+  const size = 60 * transform.scale;
+
+  return (
+    <div 
+      className="absolute inset-0 z-[500] pointer-events-none"
+      style={{
+        backgroundSize: `${size}px ${size}px`,
+        backgroundPosition: `${transform.x}px ${transform.y}px`,
+        backgroundImage: 'linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px)'
+      }}
+    />
+  );
 }
 
 export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { hotspots: any[], assignments?: any[], highlightPoi?: string | null }) {
   const [mounted, setMounted] = useState(false);
   const { watchlist } = useWatchlist();
   const [searchQuery, setSearchQuery] = useState("");
-  const [flyToTarget, setFlyToTarget] = useState<[number, number] | null>(null);
+  const [flyConfig, setFlyConfig] = useState<{ target: [number, number], zoom: number } | null>(null);
   const [highlightedSearchId, setHighlightedSearchId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,7 +76,7 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
     if (!searchQuery.trim()) return;
     const found = hotspots.find(hs => hs.hotspot_id.toLowerCase() === searchQuery.trim().toLowerCase());
     if (found) {
-      setFlyToTarget([found.lat, found.lng]);
+      setFlyConfig({ target: [found.lat, found.lng], zoom: 16 });
       setHighlightedSearchId(found.hotspot_id);
     } else {
       alert(`Hotspot ${searchQuery} not found on this map.`);
@@ -76,7 +113,8 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
         className="w-full h-full z-0"
         zoomControl={false}
       >
-        <MapController flyToTarget={flyToTarget} />
+        <DynamicGridOverlay />
+        <MapController flyConfig={flyConfig} />
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
@@ -221,17 +259,8 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
         })}
       </MapContainer>
       
-      {/* Grid Overlay */}
-      <div 
-        className="absolute inset-0 z-[500] pointer-events-none"
-        style={{
-          backgroundSize: '40px 40px',
-          backgroundImage: 'linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px)'
-        }}
-      />
-
-      {/* Search Bar Overlay */}
-      <div className="absolute top-6 left-6 z-[1000]">
+      {/* Search Bar & Recenter Overlay */}
+      <div className="absolute top-6 left-6 z-[1000] flex gap-2">
         <form onSubmit={handleSearch} className="flex items-center bg-black/80 backdrop-blur border border-border p-2 rounded shadow-2xl transition-all focus-within:border-text-primary/30">
           <Search size={16} className="text-text-secondary ml-2 mr-3" />
           <input
@@ -242,6 +271,17 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
             className="bg-transparent border-none outline-none text-sm font-light text-text-primary placeholder:text-text-muted w-[240px]"
           />
         </form>
+        <button 
+          onClick={() => {
+            setFlyConfig({ target: [12.9716, 77.5946], zoom: 12 });
+            setHighlightedSearchId(null);
+            setSearchQuery("");
+          }}
+          className="bg-black/80 backdrop-blur border border-border px-4 py-2 rounded shadow-2xl flex items-center justify-center hover:bg-text-primary/10 transition-colors text-text-secondary hover:text-text-primary"
+          title="Recenter Map"
+        >
+          <LocateFixed size={18} />
+        </button>
       </div>
 
       {/* Legend */}
