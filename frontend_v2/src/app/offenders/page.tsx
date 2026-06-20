@@ -249,5 +249,6 @@ export default function RepeatOffendersPage() {
         </table>
       </div>
     </div>
+    </div>
   );
 }

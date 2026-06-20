@@ -135,6 +135,7 @@ function DeployContent() {
         </table>
       </div>
     </div>
+    </div>
   );
 }
 
