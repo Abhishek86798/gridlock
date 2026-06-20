@@ -1,0 +1,182 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { fetchApi } from "@/lib/api";
+import { Users, AlertTriangle, MapPin, Hash } from "lucide-react";
+
+export default function RepeatOffendersPage() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchApi("/repeat-offenders", { limit: 50 }).then((res) => {
+      setData(res);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading)
+    return (
+      <div className="p-8 text-text-muted animate-pulse">
+        Loading repeat-offender data...
+      </div>
+    );
+
+  const offenders = data?.offenders || [];
+  const totalRepeat = data?.total_repeat_vehicles || 0;
+  const pctOfTotal = data?.pct_of_total_violations || 0;
+
+  // Concentration stat: top 10 offenders' share
+  const top10Sum = offenders
+    .slice(0, 10)
+    .reduce((s: number, o: any) => s + o.violation_count, 0);
+
+  return (
+    <div className="p-12 max-w-7xl mx-auto space-y-12 bg-bg-base min-h-screen">
+      <header className="space-y-4">
+        <h1 className="text-5xl font-light tracking-tight text-text-primary">
+          REPEAT OFFENDERS
+        </h1>
+        <p className="text-text-secondary font-light text-sm tracking-wide max-w-2xl">
+          Chronic violators identified by anonymised vehicle ID. Vehicle numbers
+          are PII-masked. Frequency stats are valid, real-world identity is not
+          exposed.
+        </p>
+      </header>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-transparent border border-border p-8">
+          <div className="flex items-center justify-between mb-8">
+            <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">
+              Repeat Vehicles
+            </div>
+            <Users
+              size={16}
+              className="text-text-primary"
+              strokeWidth={1}
+            />
+          </div>
+          <div className="text-4xl font-light text-text-primary tracking-tight">
+            {totalRepeat.toLocaleString()}
+          </div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
+            vehicles with ≥2 violations
+          </div>
+        </div>
+
+        <div className="bg-transparent border border-border p-8">
+          <div className="flex items-center justify-between mb-8">
+            <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">
+              Share of All Violations
+            </div>
+            <AlertTriangle
+              size={16}
+              className="text-text-primary"
+              strokeWidth={1}
+            />
+          </div>
+          <div className="text-4xl font-light text-critical tracking-tight">
+            {pctOfTotal.toFixed(1)}%
+          </div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
+            of total violations from repeaters
+          </div>
+        </div>
+
+        <div className="bg-transparent border border-border p-8">
+          <div className="flex items-center justify-between mb-8">
+            <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">
+              Worst Offender
+            </div>
+            <Hash
+              size={16}
+              className="text-text-primary"
+              strokeWidth={1}
+            />
+          </div>
+          <div className="text-4xl font-light text-text-primary tracking-tight">
+            {offenders[0]?.violation_count || 0}
+          </div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
+            violations by a single vehicle
+          </div>
+        </div>
+
+        <div className="bg-transparent border border-border p-8">
+          <div className="flex items-center justify-between mb-8">
+            <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">
+              Top 10 Concentration
+            </div>
+            <MapPin
+              size={16}
+              className="text-text-primary"
+              strokeWidth={1}
+            />
+          </div>
+          <div className="text-4xl font-light text-text-primary tracking-tight">
+            {top10Sum}
+          </div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
+            violations by top 10 vehicles
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="border border-border overflow-hidden">
+        <table className="w-full text-sm text-left">
+          <thead className="text-[10px] text-text-secondary uppercase tracking-[0.2em] font-medium border-b border-border bg-text-primary/5">
+            <tr>
+              <th className="px-8 py-6">#</th>
+              <th className="px-8 py-6">Vehicle ID</th>
+              <th className="px-8 py-6 text-right">Violations</th>
+              <th className="px-8 py-6">Top Station</th>
+              <th className="px-8 py-6">Top Hotspot</th>
+              <th className="px-8 py-6 text-right">Locations</th>
+              <th className="px-8 py-6 text-right">Hotspots</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {offenders.map((row: any, i: number) => (
+              <tr
+                key={row.vehicle_number}
+                className="hover:bg-text-primary/5 transition-colors"
+              >
+                <td className="px-8 py-6 text-text-muted">{i + 1}</td>
+                <td className="px-8 py-6 font-mono text-text-primary text-xs">
+                  {row.vehicle_number}
+                </td>
+                <td className="px-8 py-6 text-right font-light text-text-primary">
+                  {row.violation_count}
+                </td>
+                <td className="px-8 py-6 text-text-secondary font-light">
+                  {row.top_location}
+                </td>
+                <td className="px-8 py-6 text-text-secondary font-light">
+                  {row.top_hotspot}
+                </td>
+                <td className="px-8 py-6 text-right text-text-primary font-light">
+                  {row.distinct_locations}
+                </td>
+                <td className="px-8 py-6 text-right text-text-primary font-light">
+                  {row.distinct_hotspots}
+                </td>
+              </tr>
+            ))}
+            {offenders.length === 0 && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="px-8 py-12 text-center text-text-secondary font-light tracking-wide"
+                >
+                  No repeat-offender data available.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

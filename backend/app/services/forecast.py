@@ -425,7 +425,9 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         model.predict(inf[_FEATURE_COLS].fillna(0)).clip(min=0)
     )
 
-    # Primary prediction: Rolling mean (outperforms XGBoost on current data)
+    # Primary prediction: Rolling mean — near-identical MAE to XGBoost on
+    # clean holdout (5.25 vs 5.20) but trivially interpretable for a police
+    # audience ("average of last 4 weeks"). XGBoost kept for comparison only.
     inf["predicted_count"] = inf["rolling_mean_4w"].round(1)
 
     # Use max(prev, 1) to avoid absurd % when baseline_count is 0
@@ -483,8 +485,19 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
             "risk_score":      round(float(row["risk_score"]), 1),
         }
 
+    # Compute calendar date context for the prediction week
+    pw_start = datetime.date.fromisocalendar(next_yr, next_wk, 1)  # Monday
+    pw_end   = datetime.date.fromisocalendar(next_yr, next_wk, 7)  # Sunday
+
+    # Last observed date: the Sunday of the last data week
+    last_yr, last_wk = ctx["panel"]["week_ord"].max() // 100, ctx["panel"]["week_ord"].max() % 100
+    data_through = datetime.date.fromisocalendar(last_yr, last_wk, 7)
+
     return {
         "predict_week":              ctx["predict_week"],
+        "predict_week_start":        pw_start.isoformat(),
+        "predict_week_end":          pw_end.isoformat(),
+        "data_through":              data_through.isoformat(),
         "method":                    "4-week rolling mean",
         "model_mae":                 round(mae_roll, 2),
         "baseline_mae_last_week":    round(mae_last, 2),
@@ -497,11 +510,11 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
             "rolling_mean_mae":      round(mae_roll, 2),
             "last_week_mae":         round(mae_last, 2),
             "note":                  (
-                "XGBoost count:poisson model evaluated on a clean holdout (W03-W04) "
-                "outperforms the simple rolling mean baseline (MAE {:.2f} vs {:.2f}). "
-                "However, due to the enforcement reporting gap in W06-W10, "
-                "the rolling mean is retained as a more stable primary prediction "
-                "for the current heavily-skewed tail."
+                "On a clean holdout (W03-W04, before the W06-W10 gap), "
+                "XGBoost count:poisson and 4-week rolling mean are near-tied "
+                "(MAE {:.2f} vs {:.2f}). Rolling mean is retained as the "
+                "primary prediction because it is trivially interpretable "
+                "for a non-technical police audience and equally accurate."
             ).format(mae, mae_roll),
         },
         "forecast": [_build_item(row) for _, row in top.iterrows()],

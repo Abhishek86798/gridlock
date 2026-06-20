@@ -114,6 +114,9 @@ class ForecastItem(BaseModel):
 
 class ForecastResponse(BaseModel):
     predict_week: str                        # ISO label e.g. "2024-W22"
+    predict_week_start: Optional[str] = None # Calendar start date e.g. "2024-04-01"
+    predict_week_end: Optional[str] = None   # Calendar end date e.g. "2024-04-07"
+    data_through: Optional[str] = None       # Last observed date in dataset
     method: Optional[str] = None             # prediction method used
     model_mae: float                         # MAE of primary method on hold-out
     baseline_mae_last_week: float            # naive baseline: predict = last week's count
@@ -134,6 +137,8 @@ class PatrolAssignment(BaseModel):
     hotspot_id: str
     time_window: str
     risk_score: Optional[float] = None
+    route: list[str] = []
+    route_geometry: list[list[float]] = []
 
 
 class CoverageCurvePoint(BaseModel):

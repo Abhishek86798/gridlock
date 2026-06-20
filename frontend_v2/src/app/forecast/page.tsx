@@ -27,8 +27,10 @@ export default function ForecastPage() {
     <div className="p-12 max-w-7xl mx-auto space-y-12 bg-bg-base min-h-screen">
       <header className="space-y-4">
         <h1 className="text-5xl font-light tracking-tight text-text-primary">FORECAST</h1>
-        <p className="text-text-secondary font-light text-sm tracking-wide">
-          7-day predictive models for violation occurrences
+        <p className="text-text-secondary font-light text-sm tracking-wide max-w-3xl">
+          {data?.predict_week_start && data?.data_through
+            ? `Predicted violations for ${data.predict_week_start} – ${data.predict_week_end}, based on violation data through ${data.data_through}.`
+            : "7-day predictive models for violation occurrences"}
         </p>
       </header>
 
@@ -37,6 +39,11 @@ export default function ForecastPage() {
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Forecast Week</div>
           <div className="text-4xl font-light tracking-tight">{data?.predict_week || "?"}</div>
+          {data?.predict_week_start && (
+            <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
+              {data.predict_week_start} – {data.predict_week_end}
+            </div>
+          )}
         </div>
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Model MAE</div>

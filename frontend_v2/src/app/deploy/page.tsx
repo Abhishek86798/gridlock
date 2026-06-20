@@ -30,7 +30,7 @@ function DeployContent() {
       <header className="space-y-4">
         <h1 className="text-5xl font-light tracking-tight text-text-primary">DEPLOYMENT</h1>
         <p className="text-text-secondary font-light text-sm tracking-wide max-w-2xl">
-          Assign units to maximize high-priority coverage. Greedy spatial de-bunching prevents overlap within 1 km.
+          Assign units to 3-5 hotspot optimal patrol routes to maximize high-priority coverage. Greedy spatial de-bunching ensures spread and prevents overlapping patrols.
         </p>
       </header>
 
@@ -71,7 +71,7 @@ function DeployContent() {
           <thead className="text-[10px] text-text-secondary uppercase tracking-[0.2em] font-medium border-b border-border bg-text-primary/5">
             <tr>
               <th className="px-8 py-6">Unit #</th>
-              <th className="px-8 py-6">Assigned Hotspot</th>
+              <th className="px-8 py-6">Patrol Route</th>
               <th className="px-8 py-6 text-right">Risk Score</th>
               <th className="px-8 py-6 text-right">Window</th>
             </tr>
@@ -80,7 +80,7 @@ function DeployContent() {
             {assignments.map((row: any, i: number) => (
               <tr key={i} className="hover:bg-text-primary/5 transition-colors">
                 <td className="px-8 py-6 font-medium text-text-secondary">{row.unit_id}</td>
-                <td className="px-8 py-6 font-light text-text-primary">{row.hotspot_id}</td>
+                <td className="px-8 py-6 font-light text-text-primary text-xs tracking-wide">{row.route?.join(" → ") || row.hotspot_id}</td>
                 <td className="px-8 py-6 text-right font-light text-text-primary">{row.risk_score?.toFixed(1)}</td>
                 <td className="px-8 py-6 text-right font-light text-text-secondary">{row.time_window}</td>
               </tr>
