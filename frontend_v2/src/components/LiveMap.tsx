@@ -221,6 +221,15 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
         })}
       </MapContainer>
       
+      {/* Grid Overlay */}
+      <div 
+        className="absolute inset-0 z-[500] pointer-events-none"
+        style={{
+          backgroundSize: '40px 40px',
+          backgroundImage: 'linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px)'
+        }}
+      />
+
       {/* Search Bar Overlay */}
       <div className="absolute top-6 left-6 z-[1000]">
         <form onSubmit={handleSearch} className="flex items-center bg-black/80 backdrop-blur border border-border p-2 rounded shadow-2xl transition-all focus-within:border-text-primary/30">
