@@ -33,6 +33,7 @@ function DynamicGridOverlay() {
       const zoom = map.getZoom();
       const scale = Math.pow(2, zoom - 12); // Base zoom level is 12
       const bounds = map.getPixelBounds();
+      if (!bounds?.min) return;
       setTransform({ scale, x: -bounds.min.x, y: -bounds.min.y });
     };
     
