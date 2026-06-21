@@ -1,0 +1,17 @@
+# ── Geospatial (unused in API) ────────────────────────────────────────────────
+geopandas==0.14.4
+shapely==2.0.6
+folium==0.18.0
+
+# ── Dashboard (v1 legacy) ─────────────────────────────────────────────────────
+streamlit==1.40.0
+plotly==5.24.1
+matplotlib==3.11.0
+seaborn==0.13.2
+
+# ── Notebooks & Dev ──────────────────────────────────────────────────────────
+ipykernel
+jupyter
+
+# ── HTTP client (frontend → backend) ────────────────────────────────────────
+httpx==0.27.2
