@@ -48,8 +48,8 @@ flowchart TD
 ```mermaid
 flowchart TD
     A[Raw Data Ingestion] --> B{Filter validation_status}
-    B -->|Exclude 'Rejected' ONLY| C[Retain Approved & Pending]
-    B -->|Drop| D[Rejected Records]
+    B -->|Exclude 'Rejected' and 'Pending'| C[Retain Approved ONLY]
+    B -->|Drop| D[Rejected and Pending Records]
     C --> E[Coordinate Normalization & Cleaning]
     E --> F[Extract Temporal Features]
     F --> G[Calculate Rolling Aggregates]
@@ -111,8 +111,8 @@ All temporal analysis in this system is therefore labelled as logging coverage, 
 | Metric | XGBoost Model | Rolling Mean Baseline | Naive Baseline |
 | :--- | :--- | :--- | :--- |
 | **MAE** | 5.26 | 5.25 | 6.17 |
-| **Precision@10** | 0.60 | 0.60 | [PLACEHOLDER] |
-| **Precision@20** | 0.60 | [PLACEHOLDER] | [PLACEHOLDER] |
+| **Precision@10** | 0.60 | N/A (Not Tracked) | N/A (Not Tracked) |
+| **Precision@20** | 0.60 | N/A (Not Tracked) | N/A (Not Tracked) |
 
 *(Note: Results evaluated on clean holdout W03-W04)*
 
