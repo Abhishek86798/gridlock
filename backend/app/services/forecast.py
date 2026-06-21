@@ -159,8 +159,9 @@ def _assign_hotspot_ids(vdf: pd.DataFrame, hdf: pd.DataFrame) -> pd.DataFrame:
     """
     res = settings.h3_resolution
     good = vdf.dropna(subset=["latitude", "longitude"]).copy()
+    # h3 v3.7.7 uses geo_to_h3 instead of latlng_to_cell
     good["_hex"] = [
-        h3.latlng_to_cell(lat, lng, res)
+        h3.geo_to_h3(lat, lng, res)
         for lat, lng in zip(good["latitude"], good["longitude"])
     ]
     hex_to_hs = hdf.set_index("hex_id")["hotspot_id"]
