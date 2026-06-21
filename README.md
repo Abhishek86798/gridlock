@@ -86,8 +86,6 @@ frontend_v2/  (Next.js 16, React 19)
 | folium | 0.18.0 | Map rendering utility |
 | pyarrow | 17.0.0 | Parquet serialisation |
 | duckdb | 1.1.3 | Ad-hoc analytical queries |
-| streamlit | 1.40.0 | Fallback dashboard |
-| plotly | 5.24.1 | Charts in the Streamlit fallback |
 | httpx | 0.27.2 | HTTP client for inter-service calls |
 
 ### Frontend
@@ -374,15 +372,6 @@ npm start
 
 The Next.js frontend is available at `http://localhost:3000`.
 The FastAPI interactive API documentation is at `http://localhost:8000/docs`.
-
-### Option C: Streamlit fallback
-
-A Streamlit dashboard is available for environments where the Next.js frontend cannot run.
-
-```bash
-# TODO: confirm Streamlit entrypoint path
-streamlit run <entrypoint>
-```
 
 ## API Reference
 
