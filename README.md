@@ -132,13 +132,16 @@ All temporal analysis in this system is therefore labelled as logging coverage, 
 ## Screenshots
 
 **Dashboard Overview**
-[SCREENSHOT_HERE]
+<img width="1907" height="863" alt="image" src="https://github.com/user-attachments/assets/0ac46b1a-ed39-48b1-ad11-b8ed63b3158c" />
+
 
 **Live Map & Route Optimizer**
-[SCREENSHOT_HERE]
+<img width="1914" height="862" alt="image" src="https://github.com/user-attachments/assets/84e7ebbc-a294-42e3-8a5b-f4d49c49e19f" />
+
 
 **Repeat Offenders Tracking**
-[SCREENSHOT_HERE]
+<img width="1900" height="862" alt="image" src="https://github.com/user-attachments/assets/6bfcf28d-7527-4d24-ac35-d3e0cc862a83" />
+
 
 ## Installation and Setup
 
