@@ -531,6 +531,17 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     last_yr, last_wk = ctx["panel"]["week_ord"].max() // 100, ctx["panel"]["week_ord"].max() % 100
     data_through = datetime.date.fromisocalendar(last_yr, last_wk, 7)
 
+    # ── Citywide summary counts (ALL hotspots, not top-N slice) ─────────
+    # Used by the frontend KPI tiles so all three share one consistent scope.
+    # Must mirror _build_item's logic: baseline < 3 → change_pct treated as null.
+    _has_pct = inf["change_pct"].notna() & (inf["baseline_count"] >= 3)
+    citywide_summary = {
+        "total_hotspots":  int(len(inf)),
+        "critical":        int(((inf["change_pct"] > 20) & (inf["baseline_count"] > _ESCALATION_BASELINE_FLOOR) & _has_pct).sum()),
+        "spiking":         int(((inf["change_pct"] >= 10) & _has_pct).sum()),
+        "dropping":        int(((inf["change_pct"] <= -10) & _has_pct).sum()),
+    }
+
     return {
         "predict_week":              ctx["predict_week"],
         "predict_week_start":        pw_start.isoformat(),
@@ -543,6 +554,7 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         "precision_at":              ctx["precision_at"],
         "weekly_totals":             ctx["weekly_totals"],
         "data_quality_note":         ctx["data_quality_note"],
+        "citywide_summary":          citywide_summary,
         "model_comparison": {
             "xgboost_mae":           round(mae, 2),
             "rolling_mean_mae":      round(mae_roll, 2),

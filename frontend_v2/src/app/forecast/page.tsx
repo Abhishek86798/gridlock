@@ -30,9 +30,15 @@ export default function ForecastPage() {
   const forecast = data?.forecast || [];
   const topEscalations = data?.top_escalations || [];
   
-  const rising = forecast.filter((f: any) => f.change_pct > 10).length;
-  const falling = forecast.filter((f: any) => f.change_pct < -10).length;
-  const escalatingHotspots = forecast.filter((f: any) => f.is_escalating);
+  // All KPI tiles use citywide_summary (ALL hotspots, consistent scope).
+  // The backend pre-computes these from the full 1196-hotspot dataset.
+  const cw = data?.citywide_summary || {};
+  const rising = cw.spiking ?? 0;
+  const falling = cw.dropping ?? 0;
+  const criticalCount = cw.critical ?? 0;
+  const totalHotspots = cw.total_hotspots ?? 0;
+  // Escalation detail list (for banner + modal) still from top_escalations
+  const escalatingHotspots = topEscalations.filter((f: any) => f.is_escalating);
 
   return (
     <div className="p-12 max-w-7xl mx-auto space-y-12 bg-bg-base min-h-screen">
@@ -45,7 +51,7 @@ export default function ForecastPage() {
         </p>
       </header>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — all citywide scope */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Forecast Week</div>
@@ -64,17 +70,17 @@ export default function ForecastPage() {
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Spiking</div>
           <div className="text-4xl font-light text-critical">{rising}</div>
-          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">≥10% increase (broad watchlist)</div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">≥10% increase · citywide ({totalHotspots})</div>
         </div>
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Dropping</div>
           <div className="text-4xl font-light text-patrol">{falling}</div>
-          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">≤-10% decrease</div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">≤-10% decrease · citywide ({totalHotspots})</div>
         </div>
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Critical</div>
-          <div className="text-4xl font-light text-[#EF4444]">{escalatingHotspots.length}</div>
-          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">{'>'}20% spike, baseline {'>'}15</div>
+          <div className="text-4xl font-light text-[#EF4444]">{criticalCount}</div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">{'>'}20% spike, baseline {'>'}15 · citywide</div>
         </div>
       </div>
 

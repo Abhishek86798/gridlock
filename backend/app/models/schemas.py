@@ -114,6 +114,14 @@ class ForecastItem(BaseModel):
     is_escalating: Optional[bool] = False
 
 
+class CitywideSummary(BaseModel):
+    """Pre-computed KPI counts over ALL hotspots (not top-N slice)."""
+    total_hotspots: int
+    critical: int        # change_pct > 20 AND baseline_count > 15
+    spiking: int         # change_pct >= 10
+    dropping: int        # change_pct <= -10
+
+
 class ForecastResponse(BaseModel):
     predict_week: str                        # ISO label e.g. "2024-W22"
     predict_week_start: Optional[str] = None # Calendar start date e.g. "2024-04-01"
@@ -128,6 +136,7 @@ class ForecastResponse(BaseModel):
     precision_at: dict[int, float]           # {10: 0.7, 20: 0.65} — top-N overlap on hold-out
     weekly_totals: list[dict]                # [{week, total_violations}] for ramp diagnosis
     data_quality_note: str                   # plain-English enforcement-ramp / gap assessment
+    citywide_summary: CitywideSummary        # KPI tile counts (all hotspots, one scope)
     model_comparison: Optional[dict] = None  # XGBoost vs rolling mean MAE comparison
     forecast: list[ForecastItem]
     top_escalations: list[ForecastItem] = []  # escalation-score ranked (significant hotspots only)
