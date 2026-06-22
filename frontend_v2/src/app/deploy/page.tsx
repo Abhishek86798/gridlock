@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getPatrol } from "@/lib/api";
+import { getPatrol, getStationForecast } from "@/lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from "recharts";
 import { Download, AlertTriangle, ShieldCheck, TrendingUp } from "lucide-react";
 
@@ -12,12 +12,18 @@ function DeployContent() {
   const units = parseInt(searchParams.get("units") || "20", 10);
   
   const [data, setData] = useState<any>(null);
+  const [peakShiftByStation, setPeakShiftByStation] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
-    getPatrol(units).then((res) => {
-      setData(res);
+    Promise.all([getPatrol(units), getStationForecast()]).then(([patrol, stationForecast]) => {
+      setData(patrol);
+      const lookup: Record<string, any[]> = {};
+      for (const row of stationForecast.forecast || []) {
+        if (row.peak_shifts?.length) lookup[row.police_station] = row.peak_shifts;
+      }
+      setPeakShiftByStation(lookup);
       setLoading(false);
     });
   }, [units]);
@@ -169,6 +175,34 @@ function DeployContent() {
                   </div>
                 </div>
               ))}
+          </div>
+        </div>
+      )}
+
+      {/* Station Peak Shifts — top stations by predicted load with shift breakdown */}
+      {Object.keys(peakShiftByStation).length > 0 && (
+        <div className="border border-border p-8">
+          <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-1">Station Shift Windows</h2>
+          <p className="text-[10px] text-text-secondary/60 mb-6 font-light">Top stations by predicted load — peak patrol windows derived from historical hour×day patterns.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.entries(peakShiftByStation).slice(0, 6).map(([station, shifts]) => (
+              <div key={station} className="border border-border p-5">
+                <div className="text-[10px] font-light text-text-secondary uppercase tracking-widest mb-3 truncate">{station}</div>
+                <div className="flex flex-col gap-1.5">
+                  {shifts.map((ps: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <span className="text-xs font-light text-text-primary">{ps.day} · {ps.shift}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1 bg-border rounded-full overflow-hidden">
+                          <div className="h-full bg-patrol rounded-full" style={{ width: `${Math.min(ps.pct * 3, 100)}%` }} />
+                        </div>
+                        <span className="text-[10px] text-text-muted w-8 text-right">{ps.pct}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

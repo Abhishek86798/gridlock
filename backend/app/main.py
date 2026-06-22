@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core import store
 from backend.app.core.config import settings
 from backend.app.routers import analytics, hotspots
-from backend.app.services.forecast import _ensure_trained
+from backend.app.services.forecast import _ensure_trained, _ensure_station_trained
 
 
 def _load_parquet(path, label: str) -> pd.DataFrame:
@@ -79,6 +79,9 @@ async def lifespan(app: FastAPI):
     t0 = time.perf_counter()
     _ensure_trained()
     print(f"  [{(time.perf_counter()-t0)*1000:5.0f} ms]  forecast model     (warm)")
+    t0 = time.perf_counter()
+    _ensure_station_trained()
+    print(f"  [{(time.perf_counter()-t0)*1000:5.0f} ms]  station forecast   (warm)")
     print("-- Ready --")
     yield
     # Nothing to clean up — DataFrames are GC'd automatically.

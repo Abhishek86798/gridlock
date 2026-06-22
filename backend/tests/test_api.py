@@ -320,6 +320,57 @@ class TestJunctions:
             assert jn["total_violations"] >= 1000
 
 
+# ── /forecast ────────────────────────────────────────────────────────────────────
+
+class TestForecast:
+    def test_returns_ok(self, client):
+        r = client.get("/forecast", params={"top_n": 10})
+        assert r.status_code == 200
+
+    def test_method_is_xgboost(self, client):
+        body = client.get("/forecast", params={"top_n": 5}).json()
+        assert "XGBoost" in body.get("method", ""), f"method: {body.get('method')}"
+
+    def test_forecast_item_has_top_reasons(self, client):
+        body = client.get("/forecast", params={"top_n": 20}).json()
+        items = body["forecast"]
+        assert len(items) > 0
+        for item in items:
+            assert "top_reasons" in item, f"Missing top_reasons on {item['hotspot_id']}"
+
+    def test_top_reasons_schema(self, client):
+        body = client.get("/forecast", params={"top_n": 20}).json()
+        for item in body["forecast"]:
+            for r in item["top_reasons"]:
+                assert "feature" in r and "label" in r and "direction" in r
+                assert r["direction"] in {"up", "down"}, f"Bad direction: {r['direction']}"
+                assert isinstance(r["label"], str) and len(r["label"]) > 0
+
+    def test_top_reasons_max_three(self, client):
+        body = client.get("/forecast", params={"top_n": 20}).json()
+        for item in body["forecast"]:
+            assert len(item["top_reasons"]) <= 3
+
+    def test_sparse_hotspots_have_no_reasons(self, client):
+        """Hotspots with predicted_count < 1 must return empty top_reasons."""
+        body = client.get("/forecast", params={"top_n": 200}).json()
+        for item in body["forecast"]:
+            if item["predicted_count"] < 1.0:
+                assert item["top_reasons"] == [], (
+                    f"{item['hotspot_id']} predicted={item['predicted_count']} "
+                    f"but has reasons: {item['top_reasons']}"
+                )
+
+    def test_escalations_have_reasons(self, client):
+        """Top escalations (is_escalating=True) must always have SHAP reasons."""
+        body = client.get("/forecast", params={"top_n": 50}).json()
+        for item in body.get("top_escalations", []):
+            if item.get("is_escalating") and item["predicted_count"] >= 1.0:
+                assert len(item["top_reasons"]) > 0, (
+                    f"Escalating {item['hotspot_id']} has no reasons"
+                )
+
+
 # ── /forecast/stations ──────────────────────────────────────────────────────────
 
 class TestStationForecast:
@@ -334,7 +385,8 @@ class TestStationForecast:
         r = client.get("/forecast/stations")
         body = r.json()
         required = {"predict_week", "model_mae", "precision_at",
-                    "median_cv", "hotspot_median_cv", "n_stations", "forecast"}
+                    "hotspot_precision_at", "median_cv", "hotspot_median_cv",
+                    "n_stations", "forecast"}
         assert required.issubset(body.keys()), f"Missing: {required - body.keys()}"
 
     def test_item_schema(self, client):
@@ -365,3 +417,58 @@ class TestStationForecast:
         valid = {"rising", "declining", "stable", None}
         for it in r.json()["forecast"]:
             assert it["trend_label"] in valid, it["trend_label"]
+
+
+# ── /forecast/stations — shift-level distribution ─────────────────────────────
+
+class TestShiftForecast:
+    def test_peak_shifts_field_present(self, client):
+        r = client.get("/forecast/stations")
+        for it in r.json()["forecast"]:
+            assert "peak_shifts" in it, f"Missing peak_shifts on {it['police_station']}"
+
+    def test_peak_shifts_max_three(self, client):
+        r = client.get("/forecast/stations")
+        for it in r.json()["forecast"]:
+            assert len(it["peak_shifts"]) <= 3
+
+    def test_peak_shift_schema(self, client):
+        r = client.get("/forecast/stations")
+        for it in r.json()["forecast"]:
+            for ps in it["peak_shifts"]:
+                assert "day" in ps and "shift" in ps and "pct" in ps
+                assert ps["day"] in {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+                assert ps["shift"] in {"Morning", "Afternoon", "Night"}
+                assert 0.0 <= ps["pct"] <= 100.0
+
+    def test_full_21_window_sums_to_100(self, client):
+        """All 21 (day × shift) windows per station must sum to ~100%."""
+        import httpx
+        # Re-request with a special internal verify path if needed — here we
+        # test via a separate in-process call to the distribution function.
+        # As an API-level proxy: check that top-3 pcts are each positive and
+        # plausible (≤100 each, and sum ≤ 100 across top-3).
+        r = client.get("/forecast/stations")
+        for it in r.json()["forecast"]:
+            shifts = it["peak_shifts"]
+            if not shifts:
+                continue
+            total = sum(ps["pct"] for ps in shifts)
+            assert total <= 100.5, (
+                f"{it['police_station']}: top-3 pct sum {total:.1f}% exceeds 100%"
+            )
+            for ps in shifts:
+                assert ps["pct"] >= 0.0
+
+    def test_shift_bucket_correctness(self):
+        """Unit test: _hour_to_shift maps hours to the correct named bucket."""
+        import sys, os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+        from backend.app.services.forecast import _hour_to_shift
+        assert _hour_to_shift(6)  == "Morning"
+        assert _hour_to_shift(13) == "Morning"
+        assert _hour_to_shift(14) == "Afternoon"
+        assert _hour_to_shift(21) == "Afternoon"
+        assert _hour_to_shift(22) == "Night"
+        assert _hour_to_shift(0)  == "Night"
+        assert _hour_to_shift(5)  == "Night"

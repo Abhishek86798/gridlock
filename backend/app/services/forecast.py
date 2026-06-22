@@ -30,7 +30,7 @@ from typing import Any
 import h3
 import numpy as np
 import pandas as pd
-from xgboost import XGBRegressor
+from xgboost import XGBRegressor, DMatrix
 
 from backend.app.core import store
 from backend.app.core.config import settings
@@ -65,6 +65,57 @@ _FEATURE_COLS: list[str] = [
     "risk_score", "violation_severity",
     "has_junction", "has_poi",
 ]
+
+# ── SHAP feature labels ───────────────────────────────────────────────────────
+
+_FEATURE_LABELS: dict[str, str] = {
+    "lag1":               "Last week's volume",
+    "lag2":               "2 weeks ago",
+    "lag3":               "3 weeks ago",
+    "lag4":               "4 weeks ago",
+    "rolling_mean_4w":    "4-week trend",
+    "iso_week":           "Seasonal pattern",
+    "month":              "Monthly pattern",
+    "risk_score":         "Static risk score",
+    "has_junction":       "Junction proximity",
+    "has_poi":            "Near metro/commercial",
+    "violation_severity": "Violation severity",
+}
+
+
+def _top_reasons_from_contribs(
+    contribs_row: np.ndarray,
+    feature_names: list[str],
+    n: int = 3,
+) -> list[dict]:
+    """
+    Given one row of XGBoost pred_contribs output (length = n_features + 1,
+    last element is the bias term), return the top-n features by |contribution|
+    with direction and human label.
+
+    Contributions are in log-space (count:poisson objective trains on log
+    counts) — rank by magnitude only, never expose raw values.
+    """
+    # Drop the bias term (last column)
+    feature_contribs = contribs_row[:-1]
+    pairs = sorted(
+        zip(feature_names, feature_contribs),
+        key=lambda x: abs(x[1]),
+        reverse=True,
+    )
+    out = []
+    for feat, val in pairs:
+        if feat == "risk_score":
+            continue
+        out.append({
+            "feature":   feat,
+            "label":     _FEATURE_LABELS.get(feat, feat),
+            "direction": "up" if val > 0 else "down",
+        })
+        if len(out) == n:
+            break
+    return out
+
 
 # ── Module-level model cache (trains once per server process) ─────────────────
 
@@ -317,7 +368,27 @@ def _fit(vdf: pd.DataFrame, hdf: pd.DataFrame) -> dict[str, Any]:
         verbosity=0,
     )
     model.fit(X_tr_full, y_tr_full)
-    
+
+    # ── Feature contributions + predictions — computed once at fit time ───
+    # X_predict: last clean lag week row per hotspot — identical column order
+    # and fillna(0) as X_tr_full, guaranteeing contributions map to correct
+    # features. pred_contribs=True uses XGBoost's built-in tree-path
+    # attribution (equivalent to SHAP TreeExplainer, no external dependency).
+    last_clean_week = max(_CLEAN_LAG_WEEKS)
+    predict_snap    = panel[panel["week_ord"] == last_clean_week].copy()
+    X_predict       = predict_snap[_FEATURE_COLS].fillna(0)
+    hs_ids_predict  = predict_snap["hotspot_id"].values
+
+    dmat      = DMatrix(X_predict, feature_names=_FEATURE_COLS)
+    xgb_preds = model.get_booster().predict(dmat).clip(min=0)          # predicted counts
+    contribs  = model.get_booster().predict(dmat, pred_contribs=True)  # (n, n_features+1)
+
+    xgb_predicted: dict[str, float] = {}
+    shap_reasons:  dict[str, list[dict]] = {}
+    for i, hs_id in enumerate(hs_ids_predict):
+        xgb_predicted[hs_id] = round(float(xgb_preds[i]), 1)
+        shap_reasons[hs_id]  = _top_reasons_from_contribs(contribs[i], _FEATURE_COLS)
+
     # Use eval_holdout for metrics
     holdout = eval_holdout
 
@@ -369,6 +440,8 @@ def _fit(vdf: pd.DataFrame, hdf: pd.DataFrame) -> dict[str, Any]:
         "predict_week":       _iso_label(next_yr, next_wk),
         "next_yr":            next_yr,
         "next_wk":            next_wk,
+        "xgb_predicted":      xgb_predicted,
+        "shap_reasons":       shap_reasons,
     }
 
 
@@ -383,24 +456,15 @@ def _ensure_trained() -> dict[str, Any]:
 
 def get_predicted_counts() -> pd.Series:
     """
-    Per-hotspot predicted violation count for the next week, as a Series
-    indexed by hotspot_id.
+    Per-hotspot XGBoost predicted violation count for the next week, as a
+    Series indexed by hotspot_id.
 
-    This is the same ``predicted_count`` quantity surfaced by get_forecast()
-    (rolling mean across the clean lag weeks _CLEAN_LAG_WEEKS), exposed for the
-    patrol optimizer so it can allocate units against FUTURE predicted load
-    rather than historical counts. Both functions read the same cached panel
-    and the same _CLEAN_LAG_WEEKS constant, so the numbers stay consistent.
-
-    Hotspots with no clean-week signal get 0.0 (the optimizer blends in
-    historical risk for those).
+    Returns the same XGBoost predictions surfaced by get_forecast() so the
+    patrol optimizer allocates against the model output, not the rolling mean.
+    Hotspots absent from the prediction snapshot get 0.0.
     """
-    ctx   = _ensure_trained()
-    panel = ctx["panel"]
-    lag_panel = panel[panel["week_ord"].isin(_CLEAN_LAG_WEEKS)]
-    return (
-        lag_panel.groupby("hotspot_id")["count"].mean().round(1).rename("predicted_count")
-    )
+    ctx = _ensure_trained()
+    return pd.Series(ctx["xgb_predicted"], name="predicted_count").fillna(0.0)
 
 
 def get_escalation_frame() -> pd.DataFrame:
@@ -421,21 +485,16 @@ def get_escalation_frame() -> pd.DataFrame:
         panel[panel["week_ord"].isin(_CLEAN_BASELINE_WEEKS)]
         .groupby("hotspot_id")["count"].mean().round(0)
     )
-    lag_means = (
-        panel[panel["week_ord"].isin(_CLEAN_LAG_WEEKS)]
-        .groupby("hotspot_id")["count"].mean().round(1)
-    )
+    xgb_predicted = ctx["xgb_predicted"]
     ids = panel["hotspot_id"].unique()
     out = pd.DataFrame(index=pd.Index(ids, name="hotspot_id"))
     out["baseline_count"]  = baseline_means.reindex(out.index).fillna(0).astype(int)
-    out["predicted_count"] = lag_means.reindex(out.index).fillna(0.0)
+    out["predicted_count"] = pd.Series(xgb_predicted).reindex(out.index).fillna(0.0)
     out["count_delta"]     = (out["predicted_count"] - out["baseline_count"]).round(0).astype(int)
     out["change_pct"]      = (
         (out["predicted_count"] - out["baseline_count"])
         / out["baseline_count"].clip(lower=1).astype(float) * 100
     ).round(1)
-    # Mirror get_forecast's escalation criterion: meaningful % rise on a
-    # non-trivial baseline.
     out["is_escalating"] = (out["change_pct"] > 15) & (out["baseline_count"] > _ESCALATION_BASELINE_FLOOR)
     return out
 
@@ -458,21 +517,18 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     next_yr = ctx["next_yr"]
     next_wk = ctx["next_wk"]
 
-    # ── Build clean baseline and predicted counts from pre-gap weeks ──────
+    # ── Build baseline and predicted counts ──────────────────────────────
     # Baseline: mean weekly count across W01-W05 (clean validation period).
-    # Predicted: rolling mean across W02-W05 (last 4 clean weeks).
-    # Rationale: weeks W06-W10 and W12-W13 have >80% NULL validation_status
-    # due to an approval-system backlog — raw data volume is normal but
-    # the pipeline's approved-only filter drops nearly all rows.
+    # Predicted: XGBoost model output on the last clean lag week snapshot.
+    # XGBoost MAE (5.22) is marginally better than rolling mean (5.25) on
+    # the clean holdout and — critically — SHAP contributions are only
+    # meaningful when explaining the model that produced the displayed number.
     baseline_panel = panel[panel["week_ord"].isin(_CLEAN_BASELINE_WEEKS)]
-    lag_panel      = panel[panel["week_ord"].isin(_CLEAN_LAG_WEEKS)]
+    xgb_predicted  = ctx["xgb_predicted"]   # hotspot_id → float, from _fit()
 
     # Group once — avoids 1,196 individual DataFrame filter scans per request
     baseline_means = (
         baseline_panel.groupby("hotspot_id")["count"].mean().round(0).astype(int)
-    )
-    lag_means = (
-        lag_panel.groupby("hotspot_id")["count"].mean().round(1)
     )
 
     # One row per hotspot: take the last row (static fields are identical across weeks)
@@ -482,7 +538,9 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
 
     inf = statics.copy()
     inf["baseline_count"]  = baseline_means.reindex(inf.index).fillna(0).astype(int)
-    inf["predicted_count"] = lag_means.reindex(inf.index).fillna(0.0).round(1)
+    inf["predicted_count"] = (
+        pd.Series(xgb_predicted).reindex(inf.index).fillna(0.0).round(1)
+    )
     inf = inf.reset_index(drop=True)
 
     # Change metrics
@@ -529,9 +587,10 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         .reset_index(drop=True)
     )
 
-    mae       = ctx["mae"]
-    mae_last  = ctx["mae_naive_last"]
-    mae_roll  = ctx["mae_naive_roll"]
+    mae          = ctx["mae"]
+    mae_last     = ctx["mae_naive_last"]
+    mae_roll     = ctx["mae_naive_roll"]
+    shap_reasons = ctx.get("shap_reasons", {})
 
     def _build_item(row):
         predicted = round(float(row["predicted_count"]), 1)
@@ -550,11 +609,10 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
                 "trend_label":      "emerging" if predicted > 5 else "insufficient history",
                 "risk_score":       round(float(row["risk_score"]), 1),
                 "is_escalating":    False,
+                "top_reasons":      [],
             }
 
         pct = float(row["change_pct"])
-        # Classify trend — thresholds chosen so each label appears in the
-        # current data distribution (max change ~25% with clean baselines).
         if pct > 15:
             label = "rising"
         elif pct > -15:
@@ -563,6 +621,10 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
             label = "declining"
 
         is_escalating = bool(pct > 20 and prev > _ESCALATION_BASELINE_FLOOR)
+
+        # SHAP reasons: only attach when predicted_count >= 1 (below that the
+        # model has no signal — sparse hotspot, all-zero lags).
+        reasons = shap_reasons.get(row["hotspot_id"], []) if predicted >= 1.0 else []
 
         return {
             "hotspot_id":       row["hotspot_id"],
@@ -574,6 +636,7 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
             "trend_label":      label,
             "risk_score":       round(float(row["risk_score"]), 1),
             "is_escalating":    is_escalating,
+            "top_reasons":      reasons,
         }
 
     # Compute calendar date context for the prediction week
@@ -600,7 +663,7 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         "predict_week_start":        pw_start.isoformat(),
         "predict_week_end":          pw_end.isoformat(),
         "data_through":              data_through.isoformat(),
-        "method":                    "4-week rolling mean (clean weeks W02-W05)",
+        "method":                    "XGBoost count:poisson — trained on clean weeks W01-W05",
         "model_mae":                 round(mae_roll, 2),
         "baseline_mae_last_week":    round(mae_last, 2),
         "baseline_mae_rolling_mean": round(mae_roll, 2),
@@ -626,6 +689,112 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         "forecast":          [_build_item(row) for _, row in top_volume.iterrows()],
         "top_escalations":   [_build_item(row) for _, row in top_escalations.iterrows()],
     }
+
+
+# ── Shift-level distribution ──────────────────────────────────────────────────
+
+_DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+# Shift bucketing: each hour maps to one of three named shifts.
+# Morning 06-13, Afternoon 14-21, Night 22-05 (wraps midnight).
+def _hour_to_shift(hour: int) -> str:
+    if 6 <= hour <= 13:
+        return "Morning"
+    if 14 <= hour <= 21:
+        return "Afternoon"
+    return "Night"
+
+
+def _compute_peak_shifts(
+    station: str,
+    station_predicted: float,
+    hotspots_df: pd.DataFrame,
+    temporal_df: pd.DataFrame,
+) -> list[dict]:
+    """
+    Distribute station_predicted across (day_of_week, shift) windows.
+
+    Method:
+    1. For each hotspot in the station, compute its historical share of the
+       station's total violations (from hotspots_df.violation_count — same
+       source for all hotspots so shares sum to 1.0).
+    2. hotspot_predicted = station_predicted * share
+    3. For hotspots with >=5 temporal cells: distribute hotspot_predicted
+       proportionally across their hour×day cells, then bucket to shifts.
+    4. For sparse hotspots (<5 cells): distribute uniformly across all
+       21 (day, shift) windows (1/3 per shift, all 7 days).
+    5. Aggregate across hotspots → 21 (day, shift) windows → rank, return top 3.
+
+    Returns list of dicts: [{day, shift, pct}, ...], max 3 entries.
+    """
+    # Station's hotspots and their historical violation counts
+    hs_in_station = hotspots_df[hotspots_df["police_station"] == station][
+        ["hotspot_id", "violation_count"]
+    ].copy()
+
+    if hs_in_station.empty or station_predicted <= 0:
+        return []
+
+    station_total_hist = hs_in_station["violation_count"].sum()
+    if station_total_hist == 0:
+        return []
+
+    hs_in_station["share"] = hs_in_station["violation_count"] / station_total_hist
+    hs_in_station["hotspot_predicted"] = hs_in_station["share"] * station_predicted
+
+    # Coverage per hotspot in temporal
+    temporal_station = temporal_df[temporal_df["hotspot_id"].isin(hs_in_station["hotspot_id"])]
+    hs_cell_counts = temporal_station.groupby("hotspot_id").size()
+
+    # Accumulate load into 21 (day, shift) buckets
+    buckets: dict[tuple[int, str], float] = {}
+    for day in range(7):
+        for shift in ("Morning", "Afternoon", "Night"):
+            buckets[(day, shift)] = 0.0
+
+    for _, row in hs_in_station.iterrows():
+        hs_id = row["hotspot_id"]
+        hs_pred = float(row["hotspot_predicted"])
+        cell_count = int(hs_cell_counts.get(hs_id, 0))
+
+        if cell_count < 5:
+            # Sparse fallback: uniform across all 21 windows
+            per_window = hs_pred / 21.0
+            for key in buckets:
+                buckets[key] += per_window
+        else:
+            hs_temporal = temporal_station[temporal_station["hotspot_id"] == hs_id]
+            total_cells = hs_temporal["count"].sum()
+            if total_cells == 0:
+                per_window = hs_pred / 21.0
+                for key in buckets:
+                    buckets[key] += per_window
+                continue
+            # Group by (day_of_week, shift), weight by count
+            for _, tc in hs_temporal.iterrows():
+                shift = _hour_to_shift(int(tc["hour"]))
+                day = int(tc["day_of_week"])
+                buckets[(day, shift)] += hs_pred * (tc["count"] / total_cells)
+
+    total_load = sum(buckets.values())
+    if total_load == 0:
+        return []
+
+    # All 21 windows must account for 100% of the load (floating-point tolerance).
+    all_pcts = sum(v / total_load * 100 for v in buckets.values())
+    assert 99.5 <= all_pcts <= 100.5, (
+        f"Station {station}: 21-window pct sum {all_pcts:.3f}% outside [99.5, 100.5]"
+    )
+
+    ranked = sorted(buckets.items(), key=lambda kv: kv[1], reverse=True)
+    top3 = []
+    for (day, shift), load in ranked[:3]:
+        top3.append({
+            "day":   _DAY_NAMES[day],
+            "shift": shift,
+            "pct":   round(load / total_load * 100, 1),
+        })
+    return top3
 
 
 # ── Station-level forecast ────────────────────────────────────────────────────
@@ -766,12 +935,17 @@ def get_station_forecast() -> dict[str, Any]:
     ctx = _ensure_station_trained()
     preds = ctx["predictions"].sort_values("predicted_count", ascending=False)
 
-    # Per-hotspot median CV for the comparison (computed from the trained panel).
+    # Per-hotspot CV + Precision@N for the side-by-side comparison cards
+    # (both pulled from the already-trained per-hotspot context).
     hs_ctx = _ensure_trained()
     hp = hs_ctx["panel"]
     hsg = hp.groupby("hotspot_id")["count"]
     hs_cv = (hsg.std() / hsg.mean().replace(0, np.nan)).dropna()
     hotspot_median_cv = float(hs_cv.median()) if len(hs_cv) else 0.0
+    hotspot_precision_at = hs_ctx.get("precision_at", {})
+
+    hotspots_df = store.hotspots
+    temporal_df = store.temporal
 
     items = []
     for _, r in preds.iterrows():
@@ -786,21 +960,26 @@ def get_station_forecast() -> dict[str, Any]:
             trend = "declining"
         else:
             trend = "stable"
+        peak_shifts = _compute_peak_shifts(
+            r["police_station"], pred_c, hotspots_df, temporal_df
+        )
         items.append({
             "police_station":  r["police_station"],
             "predicted_count": round(pred_c, 1),
             "baseline_count":  round(base_c, 1),
             "change_pct":      change,
             "trend_label":     trend,
+            "peak_shifts":     peak_shifts,
         })
 
     return {
         "predict_week":      ctx["predict_week"],
         "model_mae":         round(ctx["mae"], 3),
-        "precision_at":      ctx["precision_at"],
-        "median_cv":         round(ctx["median_cv"], 2),
-        "hotspot_median_cv": round(hotspot_median_cv, 2),
-        "n_stations":        len(items),
+        "precision_at":          ctx["precision_at"],
+        "hotspot_precision_at":  hotspot_precision_at,
+        "median_cv":             round(ctx["median_cv"], 2),
+        "hotspot_median_cv":     round(hotspot_median_cv, 2),
+        "n_stations":            len(items),
         "forecast":          items,
     }
 

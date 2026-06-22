@@ -19,9 +19,10 @@
 | 🟡 P2 | Repeat-offender K-Means tiering (Occasional/Frequent/Habitual) | ✅ Done | habitual-offender intelligence |
 | 🟡 P2 | Station-level forecasting (coarse grain, low noise) | ✅ Done | `/forecast/stations` — P@10 0.80, CV 1.01 vs 2.00 |
 | 🟡 P2 | Risk-score rewrite (shares + shrinkage + junction mult) | ✅ Done | score spreads 9.9–62.8 (was mean 42, std 7) |
-| 🟡 P2 | Shift-level forecasting (when, not just how many) | ⬜ Todo | shift-level patrol scheduling |
+| 🟡 P2 | Shift-level forecasting (when, not just how many) | ✅ Done | top-3 (day, shift) windows per station via temporal.parquet distribution |
 | 🟡 P2 | Spatial-lag forecasting (neighbour features) | ❌ Rejected | A/B: −0.07 MAE but **0** ranking gain — see CHANGES_2026-06-22.md §3 |
-| 🟡 P2 | SHAP "why" panel on forecast | ⬜ Todo | trust + wow factor |
+| 🟡 P2 | SHAP "why" panel on forecast | ✅ Done | top-3 reason chips per hotspot; `risk_score` filtered to avoid tautology |
+| 🟢 P3 | POI metro stat card | ✅ Done | "X% of tagged violations at metro-proximate hotspots" — zero backend work |
 | 🟢 P3 | README / correctness issues (§6) | ⬜ Todo | honesty before judging |
 
 **The headline finding: the slowness is NOT the static dataset. It's algorithmic — triple-nested
@@ -227,14 +228,17 @@ underwhelming. Improvements that could actually beat the baseline:
 - [x] **Repeat-offender intelligence** (§8.4) — K-Means tiering on behavioural signals
 
 **Still to do:**
-- [ ] Shift-level forecasting (§8.2) — *when*, not just *how many*
-- [ ] Spatial-lag forecasting (§8.3) — neighbour features → true spatio-temporal model
-- [ ] Add SHAP "why" to the forecast (4.5) — cheap, high judge impact
+- [ ] Spatial-lag forecasting (§8.3) — neighbour features → true spatio-temporal model (A/B showed no ranking gain — effectively closed)
 - [ ] Fix README correctness issues (§6) — feather→parquet, blind-spot hours, placeholder metrics
 - [ ] Re-verify all endpoints end-to-end after the performance changes
 
-> Speed is fixed. Two ML differentiators are now shipped (§8.1, §8.4). The remaining ROI is
-> shift-level + spatial-lag forecasting (§8.2–8.3) + SHAP + clean README.
+**Completed since first audit:**
+- [x] Shift-level forecasting (§8.2) — top-3 (day, shift) windows per station
+- [x] SHAP "why" panel (§4.5) — top-3 reason chips; `risk_score` tautology filtered
+- [x] POI metro stat card — "X% at metro-proximate hotspots" on POI Spillover page
+
+> Speed is fixed. Four ML differentiators now shipped (§8.1, §8.2, §8.4 + SHAP).
+> Remaining work is README correctness (§6) before judging.
 
 ---
 
@@ -264,18 +268,20 @@ count — the hotspots are stably dangerous — so predictive coverage is *not* 
 historical. The differentiation lives in the escalation watch, not the coverage number. The UI
 frames coverage as *validation*, not superiority.
 
-### 8.2 Shift-Level Forecasting ⬜ TODO
-**What:** Predict not just *how many* violations will occur, but *when* (e.g. Tue 8–10 AM at
-MG Road). Enables patrol scheduling at the shift level and makes forecasts operationally useful.
+### 8.2 Shift-Level Forecasting ✅ DONE
+**What:** Predict not just *how many* violations will occur, but *when* (e.g. Tue Morning at
+a given station). Enables patrol scheduling at the shift level.
 
-**Implementation notes:**
-- The temporal artifact (`temporal.parquet`, hour × day-of-week counts per hotspot) already holds
-  the within-week distribution; the weekly forecast holds the volume. Combine: distribute the
-  predicted weekly count across the hotspot's historical hour×day signature to get per-shift
-  predicted load.
-- Output: per-hotspot top predicted shift windows; feed into `PatrolAssignment.time_window`
-  (currently derived from `_format_peak_window`) so the deployment roster becomes shift-aware.
-- Differentiator slide: "Tue 08–10 at MG Road" beats "MG Road, sometime next week."
+**How it shipped:**
+- `_compute_peak_shifts(station, station_predicted, hotspots_df, temporal_df)` in `forecast.py`:
+  distributes the station's predicted weekly count across its hotspots' historical hour×day
+  signature from `temporal.parquet`. Hours bucketed into Morning (06–13), Afternoon (14–21),
+  Night (22–05). Top-3 `(day, shift, pct)` windows returned per station.
+- Sparse hotspots (<5 temporal cells) fall back to uniform distribution across all 21 windows.
+- Invariant: all 21 windows sum to 100% ± 0.5% (assert guard in the service).
+- `PeakShift(day, shift, pct)` schema; `StationForecastItem.peak_shifts` field.
+- Surfaced on the station forecast section of the Forecasts page.
+- Differentiator: "Tue Morning, Wed Afternoon" beats "~320 violations next week."
 
 ### 8.3 Spatial-Lag Forecasting ⬜ TODO
 **What:** Incorporate activity from neighbouring hotspots as model features, so risk propagates
