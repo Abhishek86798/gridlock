@@ -161,7 +161,7 @@ def _assign_hotspot_ids(vdf: pd.DataFrame, hdf: pd.DataFrame) -> pd.DataFrame:
     good = vdf.dropna(subset=["latitude", "longitude"]).copy()
     # h3 v3.7.7 uses geo_to_h3 instead of latlng_to_cell
     good["_hex"] = [
-        h3.geo_to_h3(lat, lng, res)
+        h3.latlng_to_cell(lat, lng, res)
         for lat, lng in zip(good["latitude"], good["longitude"])
     ]
     hex_to_hs = hdf.set_index("hex_id")["hotspot_id"]
@@ -408,30 +408,23 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
     baseline_panel = panel[panel["week_ord"].isin(_CLEAN_BASELINE_WEEKS)]
     lag_panel      = panel[panel["week_ord"].isin(_CLEAN_LAG_WEEKS)]
 
-    rows = []
-    for hs_id in panel["hotspot_id"].unique():
-        hs_base = baseline_panel[baseline_panel["hotspot_id"] == hs_id]
-        hs_lag  = lag_panel[lag_panel["hotspot_id"] == hs_id]
-        hs_any  = panel[panel["hotspot_id"] == hs_id].iloc[-1]
+    # Group once — avoids 1,196 individual DataFrame filter scans per request
+    baseline_means = (
+        baseline_panel.groupby("hotspot_id")["count"].mean().round(0).astype(int)
+    )
+    lag_means = (
+        lag_panel.groupby("hotspot_id")["count"].mean().round(1)
+    )
 
-        b_vals = hs_base["count"].values
-        baseline = int(round(float(b_vals.mean()))) if len(b_vals) > 0 else 0
+    # One row per hotspot: take the last row (static fields are identical across weeks)
+    static_cols = ["hotspot_id", "police_station", "risk_score",
+                   "violation_severity", "has_junction", "has_poi"]
+    statics = panel.groupby("hotspot_id")[static_cols].last()
 
-        l_vals = hs_lag["count"].values
-        pred   = round(float(l_vals.mean()), 1) if len(l_vals) > 0 else 0.0
-
-        rows.append({
-            "hotspot_id":         hs_any["hotspot_id"],
-            "police_station":     hs_any["police_station"],
-            "risk_score":         float(hs_any["risk_score"]),
-            "violation_severity": float(hs_any["violation_severity"]),
-            "has_junction":       float(hs_any["has_junction"]),
-            "has_poi":            float(hs_any["has_poi"]),
-            "baseline_count":     baseline,
-            "predicted_count":    pred,
-        })
-
-    inf = pd.DataFrame(rows)
+    inf = statics.copy()
+    inf["baseline_count"]  = baseline_means.reindex(inf.index).fillna(0).astype(int)
+    inf["predicted_count"] = lag_means.reindex(inf.index).fillna(0.0).round(1)
+    inf = inf.reset_index(drop=True)
 
     # Change metrics
     inf["change_pct"] = (

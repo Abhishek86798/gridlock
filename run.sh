@@ -1,26 +1,36 @@
 #!/bin/bash
 set -e
 
-echo "=== Gridlock Run Script ==="
+echo "=== Trinetra Run Script ==="
+
+# 0. Python dependencies
+echo "[1/5] Installing Python dependencies..."
+pip install -r requirements.txt
 
 # 1. Pipeline
-echo "[1/4] Checking dataset..."
-if [ ! -f "data/raw/violations.csv" ]; then
-    echo "ERROR: data/raw/violations.csv missing. Please place the raw data."
-    exit 1
+echo "[2/5] Checking dataset..."
+PROCESSED_OK=""
+if [ -d "data/processed" ] && [ -n "$(ls -A data/processed/*.parquet 2>/dev/null)" ]; then
+    PROCESSED_OK="yes"
 fi
 
-echo "[2/4] Running pipeline (skips if data/processed/ is already populated, pass --force to rebuild)..."
-if [ "$1" == "--force" ] || [ ! -d "data/processed" ] || [ -z "$(ls -A data/processed/*.parquet 2>/dev/null)" ]; then
-    echo "Rebuilding processed data..."
-    python backend/pipeline/build_dataset.py
-    python backend/pipeline/precompute.py
+if [ "$1" == "--force" ] || [ -z "$PROCESSED_OK" ]; then
+    if [ ! -f "data/raw/violations.csv" ]; then
+        echo "ERROR: data/processed/*.parquet are missing AND data/raw/violations.csv is absent."
+        echo "       Cannot run. Restore either the processed parquets or the raw CSV."
+        exit 1
+    fi
+    echo "[3/5] Rebuilding processed data from raw CSV..."
+    # NOTE: must use the module form (-m). Calling the file path directly
+    # breaks the 'backend' package import.
+    python -m backend.pipeline.build_dataset
+    python -m backend.pipeline.precompute
 else
-    echo "Processed data exists. Skipping pipeline. (Use ./run.sh --force to rebuild)"
+    echo "[3/5] Processed data exists. Skipping pipeline. (Use ./run.sh --force to rebuild)"
 fi
 
 # 3. Backend
-echo "[3/4] Starting FastAPI backend..."
+echo "[4/5] Starting FastAPI backend..."
 uvicorn backend.app.main:app --port 8000 &
 BACKEND_PID=$!
 
@@ -31,7 +41,7 @@ done
 echo "Backend is up!"
 
 # 4. Frontend (Next.js v2 - Trinetra)
-echo "[4/4] Starting Trinetra Next.js frontend..."
+echo "[5/5] Starting Trinetra Next.js frontend..."
 cd frontend_v2
 if [ ! -d "node_modules" ]; then
     echo "Installing Node dependencies..."
