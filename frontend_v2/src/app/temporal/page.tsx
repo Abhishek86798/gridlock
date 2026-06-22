@@ -28,7 +28,8 @@ export default function TemporalPage() {
       .then(data => {
         setMatrix(data.matrix || []);
         setLoading(false);
-      });
+      })
+      .catch(() => setLoading(false));
   }, [selectedId]);
 
   // Pivot the matrix [hour][day_of_week]

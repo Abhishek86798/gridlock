@@ -25,7 +25,7 @@ function DeployContent() {
       }
       setPeakShiftByStation(lookup);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [units]);
 
   const assignments = data?.assignments || [];

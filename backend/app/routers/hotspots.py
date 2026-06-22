@@ -85,10 +85,11 @@ def get_heatmap(
 ):
     df = _apply_hotspot_filters(store.hotspots, police_station, violation_type, vehicle_type, min_risk, poi_category)
     max_score = float(df["risk_score"].max()) if len(df) else 1.0
-    points = [
-        {"lat": row["lat"], "lng": row["lng"], "weight": row["risk_score"] / max_score}
-        for _, row in df.iterrows()
-    ]
+    points = (
+        df[["lat", "lng"]]
+        .assign(weight=df["risk_score"] / max_score)
+        .to_dict(orient="records")
+    )
     return HeatmapResponse(points=points)
 
 
