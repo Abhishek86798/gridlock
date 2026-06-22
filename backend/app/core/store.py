@@ -15,3 +15,5 @@ by_station: pd.DataFrame = pd.DataFrame()
 by_junction: pd.DataFrame = pd.DataFrame()
 
 repeat_offenders: pd.DataFrame = pd.DataFrame()
+
+stats_cache: dict = {}

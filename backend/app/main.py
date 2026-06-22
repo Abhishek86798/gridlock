@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core import store
 from backend.app.core.config import settings
 from backend.app.routers import analytics, hotspots
+from backend.app.services.forecast import _ensure_trained, _ensure_station_trained
 
 
 def _load_parquet(path, label: str) -> pd.DataFrame:
@@ -57,6 +58,30 @@ async def lifespan(app: FastAPI):
     store.by_junction = _load_parquet(settings.by_junction_parquet, "by_junction")
     if (settings.processed_dir / 'repeat_offenders.parquet').exists():
         store.repeat_offenders = _load_parquet(settings.processed_dir / 'repeat_offenders.parquet', 'repeat_offenders')
+
+    # Pre-compute /stats aggregations once — violations data is static between restarts
+    vdf = store.violations
+    dt_col = "created_ist" if "created_ist" in vdf.columns else "created_datetime"
+    _ts = pd.to_datetime(vdf[dt_col], format="mixed", errors="coerce").dropna()
+    _blind_spot_pct = 0.0
+    if len(_ts):
+        _blind_spot_pct = round(float(((_ts.dt.hour >= 13) & (_ts.dt.hour <= 16)).sum()) / len(_ts) * 100, 1)
+    store.stats_cache = {
+        "total_violations":   int(len(vdf)),
+        "total_hotspots":     int(len(store.hotspots)),
+        "date_start":         str(_ts.min().date()) if len(_ts) else "unknown",
+        "date_end":           str(_ts.max().date()) if len(_ts) else "unknown",
+        "by_vehicle_type":    vdf["vehicle_type"].value_counts().head(20).to_dict(),
+        "by_violation_type":  vdf["primary_violation_type"].value_counts().head(20).to_dict(),
+        "by_police_station":  vdf["police_station"].value_counts().head(20).to_dict(),
+        "blind_spot_pct":     _blind_spot_pct,
+    }
+    t0 = time.perf_counter()
+    _ensure_trained()
+    print(f"  [{(time.perf_counter()-t0)*1000:5.0f} ms]  forecast model     (warm)")
+    t0 = time.perf_counter()
+    _ensure_station_trained()
+    print(f"  [{(time.perf_counter()-t0)*1000:5.0f} ms]  station forecast   (warm)")
     print("-- Ready --")
     yield
     # Nothing to clean up — DataFrames are GC'd automatically.

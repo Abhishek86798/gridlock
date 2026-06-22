@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getForecast } from "@/lib/api";
+import { getForecast, getStationForecast } from "@/lib/api";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { X, AlertTriangle } from "lucide-react";
+import { X, AlertTriangle, ArrowUp, ArrowDown, Minus } from "lucide-react";
 
 export default function ForecastPage() {
   const [data, setData] = useState<any>(null);
+  const [stationData, setStationData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
 
   useEffect(() => {
-    getForecast(25).then((res) => {
+    Promise.all([getForecast(25), getStationForecast()]).then(([res, st]) => {
       setData(res);
+      setStationData(st);
       setLoading(false);
     });
   }, []);
@@ -155,7 +157,7 @@ export default function ForecastPage() {
                 contentStyle={{ backgroundColor: '#1B1D24', borderColor: '#2F333D', color: '#F9FAFB' }}
               />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
-              <Bar dataKey="predicted_count" name="Predicted (W02-W05 avg)" fill="#6366F1" />
+              <Bar dataKey="predicted_count" name="Predicted (XGBoost)" fill="#6366F1" />
               <Bar dataKey="baseline_count" name="Baseline (W01-W05 avg)" fill="#374151" />
             </BarChart>
           </ResponsiveContainer>
@@ -174,6 +176,7 @@ export default function ForecastPage() {
               <th className="px-6 py-6 text-right">Delta</th>
               <th className="px-6 py-6 text-right">Change</th>
               <th className="px-6 py-6 text-center">Status</th>
+              <th className="px-6 py-6">Why</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -199,6 +202,23 @@ export default function ForecastPage() {
                   ) : (
                     <span className="text-[10px] uppercase tracking-wider font-medium text-text-secondary bg-text-primary/5 px-2 py-1 rounded">Stable</span>
                   )}
+                </td>
+                <td className="px-6 py-6">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(row.top_reasons || []).map((r: any, i: number) => (
+                      <span
+                        key={i}
+                        className={`inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded tracking-wide font-light ${
+                          r.direction === 'up'
+                            ? 'text-critical bg-critical/10'
+                            : 'text-text-muted bg-text-primary/5'
+                        }`}
+                      >
+                        {r.label}
+                        <span className="font-medium">{r.direction === 'up' ? '\u2191' : '\u2193'}</span>
+                      </span>
+                    ))}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -254,6 +274,115 @@ export default function ForecastPage() {
           </table>
         </div>
       </details>
+
+      {/* ── Station-level forecast ─────────────────────────────────────────── */}
+      {/* Coarser grain than per-hotspot → law of large numbers → far more       */}
+      {/* predictable. Framed as the deliberate design choice behind pairing the */}
+      {/* noisy per-hotspot forecast with the escalation watch.                  */}
+      {stationData && (
+        <section className="space-y-6 pt-8 border-t border-border" id="station-forecast">
+          <header className="space-y-2">
+            <h2 className="text-2xl font-light tracking-tight text-text-primary">STATION-LEVEL FORECAST</h2>
+            <p className="text-text-secondary font-light text-sm tracking-wide max-w-3xl">
+              Aggregating to {stationData.n_stations} police stations smooths out per-hotspot
+              noise. We forecast station trends accurately, and pair the noisier per-hotspot
+              forecast above with the escalation watch — rather than chasing exact per-hotspot counts.
+            </p>
+          </header>
+
+          {/* 3-card accuracy strip — each card shows the station-vs-hotspot contrast */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Card 1 — ranking accuracy: station P@10 vs hotspot P@10 */}
+            <div className="bg-transparent border border-border p-8">
+              <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-3">Top-10 Ranking Accuracy</div>
+              <div className="flex items-baseline gap-3">
+                <span className="text-4xl font-light tracking-tight text-patrol">
+                  {stationData.precision_at?.[10] != null ? stationData.precision_at[10].toFixed(2) : "—"}
+                </span>
+                <span className="text-sm font-light text-text-secondary">station</span>
+                <span className="text-text-muted">vs</span>
+                <span className="text-2xl font-light tracking-tight text-critical">
+                  {stationData.hotspot_precision_at?.[10] != null ? stationData.hotspot_precision_at[10].toFixed(2) : "—"}
+                </span>
+                <span className="text-sm font-light text-text-secondary">hotspot</span>
+              </div>
+              <div className="text-[10px] text-text-secondary mt-3 tracking-wide">Precision@10 — coarser grain ranks the top zones better</div>
+            </div>
+
+            {/* Card 2 — noise: station CV vs hotspot CV */}
+            <div className="bg-transparent border border-border p-8">
+              <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-3">Week-to-Week Noise (CV)</div>
+              <div className="flex items-baseline gap-3">
+                <span className="text-4xl font-light tracking-tight text-patrol">{stationData.median_cv?.toFixed(2)}</span>
+                <span className="text-sm font-light text-text-secondary">station</span>
+                <span className="text-text-muted">vs</span>
+                <span className="text-2xl font-light tracking-tight text-critical">{stationData.hotspot_median_cv?.toFixed(2)}</span>
+                <span className="text-sm font-light text-text-secondary">hotspot</span>
+              </div>
+              <div className="text-[10px] text-text-secondary mt-3 tracking-wide">Aggregating to stations roughly halves the noise</div>
+            </div>
+
+            {/* Card 3 — the design-choice caption */}
+            <div className="bg-text-primary/[0.03] border border-border p-8 flex flex-col justify-center">
+              <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-3">Why Two Grains</div>
+              <p className="text-sm font-light text-text-primary leading-relaxed">
+                Per-hotspot counts are irreducibly noisy. We forecast <span className="text-patrol">station trends accurately</span> and
+                pair the noisier per-hotspot view with the <span className="text-text-primary">escalation watch</span> — rather than
+                chasing exact per-hotspot counts.
+              </p>
+            </div>
+          </div>
+
+          {/* Station table — ranked by predicted count */}
+          <div className="border border-border overflow-hidden" id="station-forecast-table">
+            <table className="w-full text-sm text-left">
+              <thead className="text-[10px] text-text-secondary uppercase tracking-[0.2em] font-medium border-b border-border bg-text-primary/5">
+                <tr>
+                  <th className="px-6 py-6">Station</th>
+                  <th className="px-6 py-6 text-right">Predicted</th>
+                  <th className="px-6 py-6 text-right">Baseline</th>
+                  <th className="px-6 py-6 text-right">Change</th>
+                  <th className="px-6 py-6 text-center">Trend</th>
+                  <th className="px-6 py-6">Peak Shifts</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(stationData.forecast || []).map((row: any) => (
+                  <tr key={row.police_station} className="hover:bg-text-primary/5 transition-colors">
+                    <td className="px-6 py-6 font-light text-text-primary">{row.police_station}</td>
+                    <td className="px-6 py-6 text-right font-light text-text-primary">{row.predicted_count?.toFixed(1)}</td>
+                    <td className="px-6 py-6 text-right font-light text-text-secondary">{row.baseline_count?.toFixed(1)}</td>
+                    <td className={`px-6 py-6 text-right font-light ${row.change_pct > 0 ? 'text-critical' : 'text-patrol'}`}>
+                      {row.change_pct != null ? `${row.change_pct > 0 ? '+' : ''}${row.change_pct?.toFixed(1)}%` : '—'}
+                    </td>
+                    <td className="px-6 py-6">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {row.trend_label === 'rising' ? (
+                          <><ArrowUp size={14} className="text-amber-400" /><span className="text-[10px] uppercase tracking-wider font-medium text-amber-400">Rising</span></>
+                        ) : row.trend_label === 'declining' ? (
+                          <><ArrowDown size={14} className="text-patrol" /><span className="text-[10px] uppercase tracking-wider font-medium text-patrol">Declining</span></>
+                        ) : (
+                          <><Minus size={14} className="text-text-secondary" /><span className="text-[10px] uppercase tracking-wider font-medium text-text-secondary">Stable</span></>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-6">
+                      <div className="flex flex-col gap-1">
+                        {(row.peak_shifts || []).map((ps: any, i: number) => (
+                          <span key={i} className="text-[10px] font-light text-text-secondary tracking-wide">
+                            <span className="text-text-primary">{ps.day} {ps.shift}</span>
+                            <span className="text-text-muted ml-1">{ps.pct}%</span>
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -45,6 +45,11 @@ export async function getForecast(top_n = 20) {
   return data || { forecast: [] };
 }
 
+export async function getStationForecast() {
+  const data = await fetchApi("/forecast/stations");
+  return data || { forecast: [], median_cv: 0, hotspot_median_cv: 0, precision_at: {} };
+}
+
 export async function getPatrol(units = 10) {
   const data = await fetchApi("/patrol", { units });
   return data || { assignments: [], coverage_curve: [] };

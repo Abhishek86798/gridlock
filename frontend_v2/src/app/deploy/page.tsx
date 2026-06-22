@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getPatrol } from "@/lib/api";
+import { getPatrol, getStationForecast } from "@/lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceDot } from "recharts";
-import { Download } from "lucide-react";
+import { Download, AlertTriangle, ShieldCheck, TrendingUp } from "lucide-react";
 
 import { useSearchParams } from "next/navigation";
 
@@ -12,12 +12,18 @@ function DeployContent() {
   const units = parseInt(searchParams.get("units") || "20", 10);
   
   const [data, setData] = useState<any>(null);
+  const [peakShiftByStation, setPeakShiftByStation] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
-    getPatrol(units).then((res) => {
-      setData(res);
+    Promise.all([getPatrol(units), getStationForecast()]).then(([patrol, stationForecast]) => {
+      setData(patrol);
+      const lookup: Record<string, any[]> = {};
+      for (const row of stationForecast.forecast || []) {
+        if (row.peak_shifts?.length) lookup[row.police_station] = row.peak_shifts;
+      }
+      setPeakShiftByStation(lookup);
       setLoading(false);
     });
   }, [units]);
@@ -25,6 +31,11 @@ function DeployContent() {
   const assignments = data?.assignments || [];
   const coverageCurve = data?.coverage_curve || [];
   const covPct = data?.coverage_pct || 0;
+  const predCovered = data?.predicted_violations_covered ?? 0;
+  const predTotal = data?.total_predicted_load ?? 0;
+  const predPct = data?.pct_predicted_covered ?? 0;
+  const escalationWatch = data?.escalation_watch || [];
+  const uncoveredCount = escalationWatch.filter((e: any) => !e.covered).length;
 
   const exportCSV = () => {
     if (!assignments.length) return;
@@ -60,19 +71,34 @@ function DeployContent() {
       <header className="space-y-4">
         <h1 className="text-5xl font-light tracking-tight text-text-primary">DEPLOYMENT</h1>
         <p className="text-text-secondary font-light text-sm tracking-wide max-w-2xl">
-          Assign units to 3-5 hotspot optimal patrol routes to maximize high-priority coverage. Greedy spatial de-bunching ensures spread and prevents overlapping patrols.
+          Units are allocated against next week&apos;s <span className="text-text-primary">predicted</span> load,
+          then spread with greedy spatial de-bunching. The forecast agrees with history ~95% — the dangerous
+          hotspots are stably dangerous — so the value isn&apos;t a higher coverage number; it&apos;s the
+          <span className="text-critical"> Escalation Watch</span> below, which flags the rising hotspots a
+          history-only allocation under-weights.
         </p>
       </header>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-transparent border border-border p-8 flex flex-col justify-between">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-8">Units Deployed</div>
           <div className="text-4xl font-light text-text-primary tracking-tight">{data?.units || 0}</div>
         </div>
         <div className="bg-transparent border border-border p-8 flex flex-col justify-between">
+          <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-8">Predicted Violations Covered</div>
+          <div className="text-4xl font-light text-text-primary tracking-tight">
+            {Math.round(predCovered).toLocaleString()}
+            <span className="text-lg text-text-secondary"> of {Math.round(predTotal).toLocaleString()}</span>
+          </div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
+            {predPct.toFixed(1)}% of next week&apos;s predicted load
+          </div>
+        </div>
+        <div className="bg-transparent border border-border p-8 flex flex-col justify-between">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-8">Priority Coverage</div>
-          <div className="text-4xl font-light text-patrol tracking-tight">{covPct.toFixed(1)}%</div>
+          <div className="text-4xl font-light text-text-primary tracking-tight">{covPct.toFixed(1)}%</div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">spatial risk-weighted</div>
         </div>
       </div>
 
@@ -94,6 +120,92 @@ function DeployContent() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Escalation Watch — forward-looking signal: rising hotspots */}
+      {escalationWatch.length > 0 && (
+        <div className="border border-border p-8">
+          <div className="flex items-center gap-3 mb-2">
+            <TrendingUp size={16} className="text-critical" strokeWidth={1.5} />
+            <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">
+              Escalation Watch
+            </h2>
+          </div>
+          <p className="text-text-secondary font-light text-xs tracking-wide max-w-2xl mb-6">
+            Hotspots where next week's predicted load is rising vs baseline. The
+            allocation covers stable high-volume hotspots; these are the rising
+            ones —{" "}
+            <span className="text-critical">
+              {uncoveredCount} unstaffed
+            </span>{" "}
+            by the current {data?.units}-unit deployment.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...escalationWatch]
+              .sort((a: any, b: any) => Number(a.covered) - Number(b.covered) || b.count_delta - a.count_delta)
+              .map((e: any) => (
+                <div
+                  key={e.hotspot_id}
+                  className={`border p-5 ${
+                    e.covered ? "border-border" : "border-critical/40 bg-critical/5"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-mono text-text-primary text-xs">{e.hotspot_id}</span>
+                    {e.covered ? (
+                      <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-emerald-500">
+                        <ShieldCheck size={13} /> Covered
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-critical">
+                        <AlertTriangle size={13} /> Unstaffed
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-text-secondary text-xs font-light tracking-wide mb-3">
+                    {e.police_station || "—"}
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-light text-text-primary">
+                      {e.baseline_count} → {Math.round(e.predicted_count)}
+                    </span>
+                    <span className="text-sm text-critical font-light">+{e.change_pct}%</span>
+                  </div>
+                  <div className="text-[10px] text-text-secondary mt-1 tracking-wide">
+                    predicted violations next week
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Station Peak Shifts — top stations by predicted load with shift breakdown */}
+      {Object.keys(peakShiftByStation).length > 0 && (
+        <div className="border border-border p-8">
+          <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-1">Station Shift Windows</h2>
+          <p className="text-[10px] text-text-secondary/60 mb-6 font-light">Top stations by predicted load — peak patrol windows derived from historical hour×day patterns.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.entries(peakShiftByStation).slice(0, 6).map(([station, shifts]) => (
+              <div key={station} className="border border-border p-5">
+                <div className="text-[10px] font-light text-text-secondary uppercase tracking-widest mb-3 truncate">{station}</div>
+                <div className="flex flex-col gap-1.5">
+                  {shifts.map((ps: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <span className="text-xs font-light text-text-primary">{ps.day} · {ps.shift}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1 bg-border rounded-full overflow-hidden">
+                          <div className="h-full bg-patrol rounded-full" style={{ width: `${Math.min(ps.pct * 3, 100)}%` }} />
+                        </div>
+                        <span className="text-[10px] text-text-muted w-8 text-right">{ps.pct}%</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Roster Table */}
       <div>

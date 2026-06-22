@@ -2,9 +2,17 @@
 
 import { useState } from "react";
 import MapWrapper from "@/components/MapWrapper";
+import { Train } from "lucide-react";
 
 export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots: any[] }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  const metroCategory = stats.find((c) => c.poi_category === "metro");
+  const totalViolations = stats.reduce((sum, c) => sum + c.total_violations, 0);
+  const metroShare =
+    metroCategory && totalViolations > 0
+      ? ((metroCategory.total_violations / totalViolations) * 100).toFixed(1)
+      : null;
 
   return (
     <div className="flex h-screen bg-bg-base overflow-hidden">
@@ -17,6 +25,23 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
               Analysis of parking violations around major Points of Interest. Click a category to highlight tagged hotspots on the map.
             </p>
           </header>
+
+          {metroShare !== null && (
+            <div className="bg-transparent border border-border p-6 mb-8">
+              <div className="flex items-center justify-between mb-6">
+                <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">
+                  Metro Spillover
+                </div>
+                <Train size={14} className="text-text-primary" strokeWidth={1} />
+              </div>
+              <div className="text-4xl font-light text-text-primary tracking-tight">
+                {metroShare}%
+              </div>
+              <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
+                of tagged violations at metro-proximate hotspots
+              </div>
+            </div>
+          )}
 
           <div className="border border-border overflow-hidden">
             <table className="w-full text-sm text-left">

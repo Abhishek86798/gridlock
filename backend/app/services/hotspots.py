@@ -31,7 +31,11 @@ import pandas as pd
 
 from backend.app.core.config import settings
 from backend.app.services.poi_tagging import tag_hotspots as _tag_hotspots
-from backend.app.services.risk_score import compute_risk_scores
+from backend.app.services.risk_score import (
+    compute_risk_scores,
+    HIGH_IMPACT_VIOLATIONS,
+    LARGE_VEHICLE_FLOOR,
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -131,11 +135,14 @@ def compute_hotspots(
         # Centroid from H3 (not arithmetic mean — avoids camera-stack bias).
         clat, clng = h3.cell_to_latlng(hex_id)
 
-        # Risk score inputs (density + final score applied after the loop).
-        sev_agg  = float(grp["severity_score"].mean())
-        veh_agg  = float(grp["vehicle_score"].mean())
+        # Risk-score inputs — SHARE counts, not means. The impact index uses
+        # "% high-impact violations" and "% large vehicles" (shrunk toward the
+        # global rate in risk_score.py) so the carriageway-obstruction tail is
+        # preserved instead of averaged away. See risk_score.py for rationale.
+        high_impact_count  = int(grp["primary_violation_type"].isin(HIGH_IMPACT_VIOLATIONS).sum())
+        large_vehicle_count = int((grp["vehicle_score"] >= LARGE_VEHICLE_FLOOR).sum())
         junc_pct = float(grp["has_junction"].astype(float).mean())
-        j_input  = settings.junction_bonus_value if junc_pct >= 0.5 else 0.0
+        junc_flag = 1.0 if junc_pct >= 0.5 else 0.0
 
         # Logging coverage (replaces misleading "peak_window").
         morning_pct, afternoon_pct, log_window = _log_coverage(grp)
@@ -145,10 +152,10 @@ def compute_hotspots(
             "lat":                 clat,
             "lng":                 clng,
             "violation_count":     len(grp),
-            "severity_score_agg":  sev_agg,
-            "vehicle_score_agg":   veh_agg,
+            "high_impact_count":   high_impact_count,
+            "large_vehicle_count": large_vehicle_count,
             "junction_pct":        junc_pct,
-            "junction_input":      j_input,
+            "junction_flag":       junc_flag,
             "morning_log_pct":     morning_pct,
             "afternoon_log_pct":   afternoon_pct,
             "logging_window":      log_window,
@@ -227,7 +234,7 @@ if __name__ == "__main__":
     print(hs[cols].head(15).to_string(index=False))
     print()
     print("Score component means:")
-    for c in ["severity_score_agg", "density_score", "vehicle_score_agg", "junction_pct"]:
+    for c in ["severity_share", "density_score", "vehicle_share", "junction_pct"]:
         print(f"  {c:<24} {hs[c].mean():.2f}")
     print()
     print("Logging coverage:")

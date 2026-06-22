@@ -102,6 +102,12 @@ class PoiStatsResponse(BaseModel):
 
 # ── Add-on: Forecast ──────────────────────────────────────────────────────────
 
+class ReasonItem(BaseModel):
+    feature: str      # raw feature name (e.g. "lag1")
+    label: str        # human label (e.g. "Last week's volume")
+    direction: str    # "up" | "down"
+
+
 class ForecastItem(BaseModel):
     hotspot_id: str
     police_station: str
@@ -112,6 +118,7 @@ class ForecastItem(BaseModel):
     trend_label: Optional[str] = None    # "emerging" / "rising" / "stable" / "declining"
     risk_score: float        # static risk score for display / sorting
     is_escalating: Optional[bool] = False
+    top_reasons: list[ReasonItem] = []   # SHAP-derived top-3 features driving the prediction
 
 
 class CitywideSummary(BaseModel):
@@ -142,6 +149,36 @@ class ForecastResponse(BaseModel):
     top_escalations: list[ForecastItem] = []  # escalation-score ranked (significant hotspots only)
 
 
+class PeakShift(BaseModel):
+    day: str          # "Mon" / "Tue" / … / "Sun"
+    shift: str        # "Morning" / "Afternoon" / "Night"
+    pct: float        # share of station's weekly predicted load (0–100)
+
+
+class StationForecastItem(BaseModel):
+    police_station: str
+    predicted_count: float          # next-week predicted violation count (station grain)
+    baseline_count: float           # recent historical average for comparison
+    change_pct: Optional[float] = None   # % change vs baseline
+    trend_label: Optional[str] = None    # "rising" / "stable" / "declining"
+    peak_shifts: list[PeakShift] = []   # top-3 (day, shift) windows by predicted load
+
+
+class StationForecastResponse(BaseModel):
+    """Station-grain forecast. Coarser than per-hotspot, so the law of large
+    numbers makes it far more predictable — we surface it alongside the noisier
+    per-hotspot forecast to justify the trend+escalation design rather than
+    chasing exact per-hotspot counts."""
+    predict_week: str
+    model_mae: float                # station-grain hold-out MAE
+    precision_at: dict[int, float]          # {10: .., 20: ..} top-N station overlap
+    hotspot_precision_at: dict[int, float]  # per-hotspot Precision@N, for the comparison
+    median_cv: float                # median week-to-week CV at station grain
+    hotspot_median_cv: float        # per-hotspot median CV, for the comparison story
+    n_stations: int
+    forecast: list[StationForecastItem]
+
+
 # ── Add-on: Patrol ────────────────────────────────────────────────────────────
 
 class PatrolAssignment(BaseModel):
@@ -158,11 +195,31 @@ class CoverageCurvePoint(BaseModel):
     coverage_pct: float
 
 
+class EscalationItem(BaseModel):
+    """A hotspot whose predicted load is rising vs baseline — the forecast's
+    forward-looking signal, surfaced alongside the allocation."""
+    hotspot_id: str
+    police_station: Optional[str] = None
+    baseline_count: int
+    predicted_count: float
+    count_delta: int
+    change_pct: float
+    covered: bool                        # already staffed by the current allocation?
+
+
 class PatrolResponse(BaseModel):
     units: int
+    mode: str = "predictive"             # predictive | historical
     coverage_pct: float
     naive_coverage_pct: Optional[float] = None
     improvement_pct: Optional[float] = None
+    # Predictive impact: coverage of next week's predicted violation load.
+    # NOT a causal "prevented" claim — we have no patrol-effectiveness data.
+    predicted_violations_covered: Optional[float] = None
+    total_predicted_load: Optional[float] = None
+    pct_predicted_covered: Optional[float] = None
+    # Dual view: rising hotspots the optimizer flags for pre-positioning.
+    escalation_watch: list[EscalationItem] = []
     assignments: list[PatrolAssignment]
     coverage_curve: list[CoverageCurvePoint] = []
 
@@ -176,11 +233,26 @@ class OffenderItem(BaseModel):
     distinct_locations: int
     top_hotspot: Optional[str] = None
     distinct_hotspots: Optional[int] = None
+    risk_tier: Optional[str] = None       # Occasional | Frequent | Habitual (K-Means)
+    frequency: Optional[float] = None     # violations per active day
+    avg_days_between: Optional[float] = None  # mean days between consecutive violations
+
+
+class TierCentroid(BaseModel):
+    """One K-Means cluster centre in real units — the 'what is a Habitual
+    offender' explainer behind the tiering."""
+    risk_tier: str
+    total_violations: float
+    frequency: float
+    avg_days_between: float
+    vehicle_count: int
 
 
 class RepeatOffendersResponse(BaseModel):
-    total_repeat_vehicles: int       # vehicles with >= 3 violations
+    total_repeat_vehicles: int       # vehicles with >= 3 violations and >= 7 active days
     pct_of_total_violations: float   # what % of all violations they account for
+    tier_counts: dict[str, int] = {}     # offenders per tier
+    centroids: list[TierCentroid] = []   # cluster centres (ML explainer)
     offenders: list[OffenderItem]
 
 
