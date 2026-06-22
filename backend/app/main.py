@@ -56,8 +56,11 @@ async def lifespan(app: FastAPI):
     store.temporal    = _load_parquet(settings.temporal_parquet,    "temporal")
     store.by_station  = _load_parquet(settings.by_station_parquet,  "by_station")
     store.by_junction = _load_parquet(settings.by_junction_parquet, "by_junction")
-    if (settings.processed_dir / 'repeat_offenders.parquet').exists():
-        store.repeat_offenders = _load_parquet(settings.processed_dir / 'repeat_offenders.parquet', 'repeat_offenders')
+    _ro_path = settings.processed_dir / 'repeat_offenders.parquet'
+    if _ro_path.exists():
+        store.repeat_offenders = _load_parquet(_ro_path, 'repeat_offenders')
+    else:
+        print(f"WARNING: {_ro_path} not found — /repeat-offenders will return 503")
 
     # Pre-compute /stats aggregations once — violations data is static between restarts
     vdf = store.violations

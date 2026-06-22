@@ -113,23 +113,16 @@ def get_priority(
     p90 = float(all_scores.quantile(0.90))
     p99 = float(all_scores.quantile(0.99))
 
-    def _tier(score: float) -> str:
-        if score >= p99:
-            return "Critical"
-        if score >= p90:
-            return "Elevated"
-        return "Standard"
-
-    items = [
-        {
-            "rank": i + 1,
-            "hotspot_id": row["hotspot_id"],
-            "risk_score": row["risk_score"],
-            "logging_window": row["logging_window"],
-            "police_station": row["police_station"],
-            "priority_tier": _tier(float(row["risk_score"])),
-        }
-        for i, (_, row) in enumerate(df.iterrows())
-    ]
+    df["_tier"] = pd.cut(
+        df["risk_score"],
+        bins=[-float("inf"), p90, p99, float("inf")],
+        labels=["Standard", "Elevated", "Critical"],
+    ).astype(str)
+    df["_rank"] = range(1, len(df) + 1)
+    items = (
+        df[["_rank", "hotspot_id", "risk_score", "logging_window", "police_station", "_tier"]]
+        .rename(columns={"_rank": "rank", "_tier": "priority_tier"})
+        .to_dict(orient="records")
+    )
     return PriorityResponse(priority=items)
 
