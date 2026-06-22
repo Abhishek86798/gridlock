@@ -6,7 +6,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.app.core import store
-from backend.app.models.schemas import ForecastResponse, PoiStatsResponse, StatsResponse, TemporalResponse, PatrolResponse, RepeatOffendersResponse, EnforcementQualityResponse
+from backend.app.models.schemas import ForecastResponse, PoiStatsResponse, StatsResponse, TemporalResponse, PatrolResponse, RepeatOffendersResponse, EnforcementQualityResponse, StationForecastResponse
 from backend.app.services import forecast as forecast_service
 from backend.app.services import patrol_optimizer
 
@@ -91,6 +91,28 @@ def get_forecast(
         raise HTTPException(422, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(500, f"Forecast model error: {exc}") from exc
+    return result
+
+
+@router.get("/forecast/stations", response_model=StationForecastResponse)
+def get_station_forecast():
+    """
+    Station-grain forecast for the next ISO week.
+
+    Coarser than the per-hotspot forecast (53 stations vs ~1,200 hotspots), so
+    the law of large numbers makes station-week counts far more predictable —
+    roughly half the week-to-week noise (median CV ~1.0 vs ~2.0 per-hotspot).
+    We surface it alongside the per-hotspot view to justify forecasting trend +
+    flagging escalation rather than chasing exact per-hotspot counts.
+
+    Trains once at first request and is cached for the server lifetime.
+    """
+    if store.violations.empty:
+        raise HTTPException(503, "Artifacts not loaded yet")
+    try:
+        result = forecast_service.get_station_forecast()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Station forecast error: {exc}") from exc
     return result
 
 

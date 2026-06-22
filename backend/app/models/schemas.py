@@ -142,6 +142,28 @@ class ForecastResponse(BaseModel):
     top_escalations: list[ForecastItem] = []  # escalation-score ranked (significant hotspots only)
 
 
+class StationForecastItem(BaseModel):
+    police_station: str
+    predicted_count: float          # next-week predicted violation count (station grain)
+    baseline_count: float           # recent historical average for comparison
+    change_pct: Optional[float] = None   # % change vs baseline
+    trend_label: Optional[str] = None    # "rising" / "stable" / "declining"
+
+
+class StationForecastResponse(BaseModel):
+    """Station-grain forecast. Coarser than per-hotspot, so the law of large
+    numbers makes it far more predictable — we surface it alongside the noisier
+    per-hotspot forecast to justify the trend+escalation design rather than
+    chasing exact per-hotspot counts."""
+    predict_week: str
+    model_mae: float                # station-grain hold-out MAE
+    precision_at: dict[int, float]  # {10: .., 20: ..} top-N station overlap
+    median_cv: float                # median week-to-week CV at station grain
+    hotspot_median_cv: float        # per-hotspot median CV, for the comparison story
+    n_stations: int
+    forecast: list[StationForecastItem]
+
+
 # ── Add-on: Patrol ────────────────────────────────────────────────────────────
 
 class PatrolAssignment(BaseModel):

@@ -1,55 +1,54 @@
 """
-Step 2.3 - Congestion-risk score: interpretable 0-100 impact index per hotspot.
+Step 2.3 - Congestion-impact score: interpretable 0-100 index per hotspot.
+
+This is a CARRIAGEWAY-OBSTRUCTION impact index, not a count-risk score. It is
+built to vary widely so a tanker on a main road at a junction massively
+outscores a scooter on a side lane — directly answering the problem statement's
+"quantify impact on traffic flow" goal.
 
 Formula (documented for explainability to judges / BTP leadership)
 ------------------------------------------------------------------
 
-  risk_score = (severity_score_agg  x weight_severity)    [0.40]
-             + (density_score        x weight_density)     [0.25]
-             + (vehicle_score_agg   x weight_vehicle_size) [0.20]
-             + (junction_input      x weight_junction)     [0.15]
+  core = (severity_share x SEV_W)    [0.45]   % high-impact parking
+       + (density_score  x DEN_W)    [0.30]   log-normalised volume
+       + (vehicle_share  x VEH_W)    [0.25]   % large vehicles
 
-  Clamped to [0, 100]. All four components are on a 0-100 scale.
+  risk_score = core x (1 + JUNC_MULT x junction_flag)   then clamp [0, 100]
 
-Component breakdown
--------------------
-  severity_score_agg  (0-100)
-      Mean per-violation severity weight, normalised to 0-100.
-      PARKING IN A MAIN ROAD = 100 (3.0 / max 3.0)
-      PARKING NEAR ROAD CROSSING = 83
-      PARKING ON FOOTPATH = 67
-      WRONG PARKING = 50
-      NO PARKING / unknown = 33
-      Source: SEVERITY_WEIGHTS in config.py, normalised in features.py.
+  The junction term is MULTIPLICATIVE — a hotspot at an intersection is
+  categorically worse, not "+3.75 points worse". (1 + x) form so it can only
+  amplify, never annihilate.
 
-  density_score  (0-100)
-      Log-normalised violation count. log1p is used so that the
-      difference between a 10-violation cell and a 50-violation cell
-      is meaningful, but a single mega-cluster at 5,000+ doesn't
-      compress everything else to near-zero.
-      density_score = log1p(count) / log1p(ref_max) x 100
-      ref_max defaults to the observed maximum across all hotspots,
-      but can be fixed for reproducibility across incremental runs.
+Why SHARES, not means (the key design choice)
+---------------------------------------------
+  The previous score averaged per-violation severity/vehicle weights. Averaging
+  hundreds of violations mean-reverts every hotspot toward the population centre
+  (old score: mean 42, std 7 — nearly constant). A cell with many tankers but
+  mostly scooters averaged to "medium" and the tanker signal vanished.
 
-  vehicle_score_agg  (0-100)
-      Mean per-violation carriageway-blocking score, normalised 0-100.
-      Tanker / HGV / large bus = 100  (1.0 / max 1.0 x 100)
-      LGV / tempo = 80-85
-      Car / van = 70-75
-      Scooter / motorcycle = 30
-      Source: VEHICLE_NORMALIZE in config.py, applied in features.py.
+  Shares preserve the tail: "62% of this cell is main-road parking" /
+  "34% are large vehicles" stays high regardless of the scooter background, and
+  it is more interpretable than "mean severity 56".
 
-  junction_input  (0 or 25)
-      Flat bonus from config.junction_bonus_value when >= 50 % of the
-      hotspot's violations carry a named junction. Represents the
-      documented higher traffic impact at intersections.
-      Max contribution: 25 x 0.15 = 3.75 points.
+Small-sample shrinkage (James-Stein toward the global prior)
+------------------------------------------------------------
+  A cell with 9 violations that happen to all be main-road parking shows 100%
+  severity share — noise, not a hotspot. Each share is shrunk toward the global
+  rate with strength SHRINK_K: a cell with n=SHRINK_K is pulled halfway to the
+  prior; large cells are barely moved. This kept n<15 cells in the top-100 down
+  from 31 (raw) to 2 (shrunk) in prototyping.
 
-Tuning
-------
-  All weights and the junction bonus value are exposed in config.py so
-  they can be adjusted without touching this file. The formula is
-  documented above so any judge can audit it in under 60 seconds.
+      shrunk_share = (k_hits + SHRINK_K * prior) / (n + SHRINK_K) * 100
+
+Component scales
+----------------
+  severity_share  (0-100)  % of cell's violations that are high-impact types
+                           (main road / near crossing / traffic-light-zebra).
+  vehicle_share   (0-100)  % of cell's violations by large vehicles
+                           (vehicle_score >= LARGE_VEHICLE_FLOOR, ~LGV and up).
+  density_score   (0-100)  log1p(count) / log1p(ref_max) * 100.
+  junction_flag   (0 or 1) 1 when >= 50% of the cell's violations are at a
+                           named junction.
 """
 
 from __future__ import annotations
@@ -58,6 +57,21 @@ import numpy as np
 import pandas as pd
 
 from backend.app.core.config import settings
+
+# ── Impact-index tuning (locked after offline prototype; see risk_score docs) ──
+SEV_W = 0.45
+DEN_W = 0.30
+VEH_W = 0.25
+JUNC_MULT = 0.35            # junction hotspot scores up to 35% higher
+SHRINK_K = 20              # shrinkage strength: n=20 → halfway to the prior
+LARGE_VEHICLE_FLOOR = 80.0  # vehicle_score >= this == "large vehicle" (LGV+)
+
+# High-impact violation types — the ones that genuinely choke a carriageway.
+HIGH_IMPACT_VIOLATIONS = {
+    "PARKING IN A MAIN ROAD",
+    "PARKING NEAR ROAD CROSSING",
+    "PARKING NEAR TRAFFIC LIGHT OR ZEBRA CROSS",
+}
 
 
 def compute_density_score(
@@ -86,39 +100,53 @@ def compute_density_score(
     return (np.log1p(counts.astype(float)) / np.log1p(max_val) * 100).astype("float32")
 
 
+def _shrunk_share(hits: pd.Series, n: pd.Series, prior: float) -> pd.Series:
+    """James-Stein shrinkage of a 0-1 rate toward ``prior``, returned as 0-100.
+
+    A cell with n == SHRINK_K is pulled halfway to the prior; large cells are
+    barely moved. Kills small-sample share spikes (9/9 = 100%) without touching
+    genuine high-volume hotspots.
+    """
+    return ((hits + SHRINK_K * prior) / (n + SHRINK_K) * 100).astype("float32")
+
+
 def compute_risk_scores(hotspots: pd.DataFrame) -> pd.DataFrame:
-    """Apply the documented risk-score formula to a hotspots DataFrame.
+    """Apply the congestion-impact formula to a hotspots DataFrame.
 
     Expects columns produced by compute_hotspots():
-        severity_score_agg  float  mean per-violation severity (0-100)
-        vehicle_score_agg   float  mean per-violation vehicle weight (0-100)
-        junction_input      float  0 or junction_bonus_value (default 25)
-        violation_count     int    total violations in cluster
+        high_impact_count  int    # high-impact-type violations in cluster
+        large_vehicle_count int   # large-vehicle violations in cluster
+        violation_count    int    total violations in cluster
+        junction_flag      float  0 or 1 (>= 50% at a named junction)
 
     Adds columns:
-        density_score  float32  log-normalised count (0-100)
-        risk_score     float32  final composite score (0-100)
-
-    Parameters
-    ----------
-    hotspots:
-        DataFrame with one row per hotspot.
+        severity_share  float32  shrunk % high-impact (0-100)
+        vehicle_share   float32  shrunk % large-vehicle (0-100)
+        density_score   float32  log-normalised count (0-100)
+        risk_score      float32  final composite impact index (0-100)
 
     Returns
     -------
     pd.DataFrame
-        Same DataFrame with density_score and risk_score columns added.
+        Same DataFrame with the four columns above added.
     """
     df = hotspots.copy()
 
-    df["density_score"] = compute_density_score(df["violation_count"]).round(2)
+    n = df["violation_count"].astype(float)
+    # Global priors = citywide hit rates (weighted by volume).
+    prior_sev = float(df["high_impact_count"].sum() / n.sum()) if n.sum() else 0.0
+    prior_veh = float(df["large_vehicle_count"].sum() / n.sum()) if n.sum() else 0.0
 
-    raw = (
-        df["severity_score_agg"] * settings.weight_severity
-        + df["density_score"]    * settings.weight_density
-        + df["vehicle_score_agg"] * settings.weight_vehicle_size
-        + df["junction_input"]   * settings.weight_junction
+    df["severity_share"] = _shrunk_share(df["high_impact_count"].astype(float), n, prior_sev)
+    df["vehicle_share"]  = _shrunk_share(df["large_vehicle_count"].astype(float), n, prior_veh)
+    df["density_score"]  = compute_density_score(df["violation_count"]).round(2)
+
+    core = (
+        df["severity_share"] * SEV_W
+        + df["density_score"] * DEN_W
+        + df["vehicle_share"] * VEH_W
     )
+    raw = core * (1.0 + JUNC_MULT * df["junction_flag"].astype(float))
     df["risk_score"] = raw.clip(upper=100).round(2).astype("float32")
 
     return df
@@ -127,29 +155,26 @@ def compute_risk_scores(hotspots: pd.DataFrame) -> pd.DataFrame:
 def score_breakdown(hotspot_row: pd.Series) -> dict[str, float]:
     """Return a labelled breakdown of how a single hotspot's score is built.
 
-    Useful for the judge explainability moment: "walk me through the score."
-
-    Example
-    -------
-    >>> breakdown = score_breakdown(hotspots.iloc[0])
-    >>> for component, value in breakdown.items():
-    ...     print(f"  {component}: {value:.1f}")
+    The judge explainability moment: "walk me through the score." Shows the
+    three additive components and the junction multiplier separately.
     """
-    sev  = float(hotspot_row["severity_score_agg"])
-    den  = float(hotspot_row["density_score"])
-    veh  = float(hotspot_row["vehicle_score_agg"])
-    junc = float(hotspot_row["junction_input"])
+    sev = float(hotspot_row["severity_share"])
+    den = float(hotspot_row["density_score"])
+    veh = float(hotspot_row["vehicle_share"])
+    junc_flag = float(hotspot_row["junction_flag"])
 
-    sev_contrib  = sev  * settings.weight_severity
-    den_contrib  = den  * settings.weight_density
-    veh_contrib  = veh  * settings.weight_vehicle_size
-    junc_contrib = junc * settings.weight_junction
-    total        = min(sev_contrib + den_contrib + veh_contrib + junc_contrib, 100.0)
+    sev_contrib = sev * SEV_W
+    den_contrib = den * DEN_W
+    veh_contrib = veh * VEH_W
+    core = sev_contrib + den_contrib + veh_contrib
+    multiplier = 1.0 + JUNC_MULT * junc_flag
+    total = min(core * multiplier, 100.0)
 
     return {
-        "severity_component  (x0.40)": round(sev_contrib,  2),
-        "density_component   (x0.25)": round(den_contrib,  2),
-        "vehicle_component   (x0.20)": round(veh_contrib,  2),
-        "junction_component  (x0.15)": round(junc_contrib, 2),
-        "risk_score                  ": round(total,         2),
+        "severity_component  (x0.45)": round(sev_contrib, 2),
+        "density_component   (x0.30)": round(den_contrib, 2),
+        "vehicle_component   (x0.25)": round(veh_contrib, 2),
+        "core                       ": round(core, 2),
+        "junction_multiplier        ": round(multiplier, 2),
+        "risk_score                 ": round(total, 2),
     }

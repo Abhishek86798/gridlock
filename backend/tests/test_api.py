@@ -171,7 +171,7 @@ class TestPriority:
         r = client.get("/priority?limit=1")
         item = r.json()["priority"][0]
         required = {"rank", "hotspot_id", "risk_score", "logging_window",
-                    "police_station", "recommended_units"}
+                    "police_station", "priority_tier"}
         assert required.issubset(item.keys())
         assert "peak_window" not in item
 
@@ -180,10 +180,11 @@ class TestPriority:
         scores = [it["risk_score"] for it in r.json()["priority"]]
         assert scores == sorted(scores, reverse=True)
 
-    def test_recommended_units_at_least_1(self, client):
+    def test_priority_tier_valid_values(self, client):
         r = client.get("/priority?limit=50")
+        valid = {"Critical", "Elevated", "Standard"}
         for it in r.json()["priority"]:
-            assert it["recommended_units"] >= 1
+            assert it["priority_tier"] in valid, it["priority_tier"]
 
     def test_filter_by_station(self, client):
         r = client.get("/priority?police_station=Upparpet")
@@ -317,3 +318,50 @@ class TestJunctions:
         r = client.get("/junctions?min_violations=1000&limit=153")
         for jn in r.json()["junctions"]:
             assert jn["total_violations"] >= 1000
+
+
+# ── /forecast/stations ──────────────────────────────────────────────────────────
+
+class TestStationForecast:
+    def test_returns_53_stations(self, client):
+        r = client.get("/forecast/stations")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["n_stations"] == 53
+        assert len(body["forecast"]) == 53
+
+    def test_response_schema(self, client):
+        r = client.get("/forecast/stations")
+        body = r.json()
+        required = {"predict_week", "model_mae", "precision_at",
+                    "median_cv", "hotspot_median_cv", "n_stations", "forecast"}
+        assert required.issubset(body.keys()), f"Missing: {required - body.keys()}"
+
+    def test_item_schema(self, client):
+        r = client.get("/forecast/stations")
+        item = r.json()["forecast"][0]
+        required = {"police_station", "predicted_count", "baseline_count",
+                    "change_pct", "trend_label"}
+        assert required.issubset(item.keys())
+
+    def test_station_grain_less_noisy_than_hotspot(self, client):
+        # The core design claim: aggregating to stations roughly halves the
+        # week-to-week noise vs per-hotspot. Guard the narrative numerically.
+        body = client.get("/forecast/stations").json()
+        assert body["median_cv"] < body["hotspot_median_cv"]
+
+    def test_predicted_counts_non_negative(self, client):
+        r = client.get("/forecast/stations")
+        for it in r.json()["forecast"]:
+            assert it["predicted_count"] >= 0
+
+    def test_sorted_by_predicted_desc(self, client):
+        r = client.get("/forecast/stations")
+        preds = [it["predicted_count"] for it in r.json()["forecast"]]
+        assert preds == sorted(preds, reverse=True)
+
+    def test_trend_label_valid_values(self, client):
+        r = client.get("/forecast/stations")
+        valid = {"rising", "declining", "stable", None}
+        for it in r.json()["forecast"]:
+            assert it["trend_label"] in valid, it["trend_label"]

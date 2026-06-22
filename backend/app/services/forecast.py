@@ -627,3 +627,180 @@ def get_forecast(top_n: int = 30) -> dict[str, Any]:
         "top_escalations":   [_build_item(row) for _, row in top_escalations.iterrows()],
     }
 
+
+# ── Station-level forecast ────────────────────────────────────────────────────
+# Coarser grain than per-hotspot: 53 stations vs 1,196 hotspots. The law of
+# large numbers makes station-week counts far more predictable (median CV ~1.0
+# vs ~2.0 per-hotspot). We surface this alongside the noisier per-hotspot
+# forecast to justify forecasting trend + flagging escalation rather than
+# chasing exact per-hotspot counts. Measured on the same clean holdout
+# (W03-W04) as the per-hotspot model. Uses reg:squarederror, not count:poisson:
+# station counts reach ~1,900/wk and the Poisson objective exponentiates lags,
+# which overflows on out-of-range values.
+
+_station_cache: dict[str, Any] | None = None
+
+_STATION_FEATURES = ["lag1", "lag2", "lag3", "lag4", "rolling_mean_4w"]
+_STATION_EVAL_TRAIN_MAX = 202402
+_STATION_EVAL_HOLDOUT   = [202403, 202404]
+
+
+def _build_station_panel(vdf: pd.DataFrame) -> pd.DataFrame:
+    """Dense (police_station x week_ord) weekly-count panel with lag features."""
+    v = vdf.dropna(subset=["police_station"]).copy()
+    iso = pd.to_datetime(v["created_datetime"]).dt.isocalendar()
+    v["week_ord"] = (iso["year"].astype(int) * 100 + iso["week"].astype(int)).values
+
+    counts = (
+        v.groupby(["police_station", "week_ord"]).size().reset_index(name="count")
+    )
+    all_weeks = sorted(counts["week_ord"].unique())
+    dense = pd.MultiIndex.from_product(
+        [counts["police_station"].unique(), all_weeks],
+        names=["police_station", "week_ord"],
+    )
+    panel = (
+        counts.set_index(["police_station", "week_ord"])
+        .reindex(dense, fill_value=0)
+        .reset_index()
+        .sort_values(["police_station", "week_ord"])
+    )
+    for lag in range(1, _LAG_WEEKS + 1):
+        panel[f"lag{lag}"] = panel.groupby("police_station")["count"].shift(lag)
+    lag_cols = [f"lag{i}" for i in range(1, _LAG_WEEKS + 1)]
+    panel["rolling_mean_4w"] = panel[lag_cols].mean(axis=1)
+    return panel.dropna(subset=lag_cols).reset_index(drop=True)
+
+
+def _fit_station(vdf: pd.DataFrame) -> dict[str, Any]:
+    panel = _build_station_panel(vdf)
+
+    tr = panel[panel["week_ord"] <= _STATION_EVAL_TRAIN_MAX]
+    ho = panel[panel["week_ord"].isin(_STATION_EVAL_HOLDOUT)]
+
+    model = XGBRegressor(
+        n_estimators=settings.forecast_n_estimators,
+        max_depth=settings.forecast_max_depth,
+        objective="reg:squarederror",
+        learning_rate=0.05, subsample=0.8, colsample_bytree=0.8,
+        random_state=42, n_jobs=-1, verbosity=0,
+    )
+    model.fit(tr[_STATION_FEATURES].fillna(0),
+              tr["count"].clip(lower=0).astype(float))
+
+    mae = 0.0
+    precision_at: dict[int, float] = {}
+    if len(ho) > 0:
+        pred = model.predict(ho[_STATION_FEATURES].fillna(0))
+        mae = float(np.abs(pred - ho["count"].values).mean())
+        last = ho["week_ord"].max()
+        snap = ho[ho["week_ord"] == last].copy()
+        snap["_pred"] = model.predict(snap[_STATION_FEATURES].fillna(0))
+        for n in (10, 20):
+            if len(snap) >= n:
+                actual = set(snap.nlargest(n, "count")["police_station"])
+                predict = set(snap.nlargest(n, "_pred")["police_station"])
+                precision_at[n] = round(len(actual & predict) / n, 3)
+
+    # Week-to-week CV at station grain (the predictability story).
+    sg = panel.groupby("police_station")["count"]
+    cv = (sg.std() / sg.mean().replace(0, np.nan)).dropna()
+    median_cv = float(cv.median()) if len(cv) else 0.0
+
+    # Next-week prediction. Weeks W06-W13 (202406-202413) are decimated by the
+    # validation_status approval backlog (26-889 rows vs ~8,000 normal), so the
+    # raw tail lags are garbage. Mirror the per-hotspot model's clean-week
+    # discipline: train only on clean weeks and build the prediction snapshot
+    # from the last clean lag window (_CLEAN_LAG_WEEKS), not the corrupted tail.
+    clean_panel = panel[panel["week_ord"].isin(_CLEAN_BASELINE_WEEKS)]
+    full_model = XGBRegressor(
+        n_estimators=settings.forecast_n_estimators,
+        max_depth=settings.forecast_max_depth,
+        objective="reg:squarederror",
+        learning_rate=0.05, subsample=0.8, colsample_bytree=0.8,
+        random_state=42, n_jobs=-1, verbosity=0,
+    )
+    full_model.fit(clean_panel[_STATION_FEATURES].fillna(0),
+                   clean_panel["count"].clip(lower=0).astype(float))
+
+    # Per-station lag snapshot built from the clean window: lag_k = count in the
+    # k-th most recent clean week, rolling mean over the clean lag weeks. This is
+    # the same quantity the per-hotspot forecast predicts from.
+    last_clean = max(_CLEAN_LAG_WEEKS)
+    snap_all = panel[panel["week_ord"] == last_clean].copy()
+    snap_all["predicted_count"] = (
+        full_model.predict(snap_all[_STATION_FEATURES].fillna(0)).clip(min=0)
+    )
+    snap_all["baseline_count"] = snap_all["rolling_mean_4w"]
+
+    next_monday = (
+        datetime.date.fromisocalendar(last_clean // 100, last_clean % 100, 1)
+        + datetime.timedelta(weeks=1)
+    )
+    ni = next_monday.isocalendar()
+
+    return {
+        "panel":         panel,
+        "mae":           mae,
+        "precision_at":  precision_at,
+        "median_cv":     median_cv,
+        "predictions":   snap_all,
+        "predict_week":  _iso_label(int(ni[0]), int(ni[1])),
+    }
+
+
+def _ensure_station_trained() -> dict[str, Any]:
+    global _station_cache
+    if _station_cache is None:
+        _station_cache = _fit_station(store.violations)
+    return _station_cache
+
+
+def get_station_forecast() -> dict[str, Any]:
+    """Station-grain forecast for the next ISO week, ranked by predicted count.
+
+    Returns a plain dict matching the StationForecastResponse schema. The
+    ``median_cv`` / ``hotspot_median_cv`` pair carries the design narrative:
+    station grain roughly halves week-to-week noise vs per-hotspot.
+    """
+    ctx = _ensure_station_trained()
+    preds = ctx["predictions"].sort_values("predicted_count", ascending=False)
+
+    # Per-hotspot median CV for the comparison (computed from the trained panel).
+    hs_ctx = _ensure_trained()
+    hp = hs_ctx["panel"]
+    hsg = hp.groupby("hotspot_id")["count"]
+    hs_cv = (hsg.std() / hsg.mean().replace(0, np.nan)).dropna()
+    hotspot_median_cv = float(hs_cv.median()) if len(hs_cv) else 0.0
+
+    items = []
+    for _, r in preds.iterrows():
+        pred_c = float(r["predicted_count"])
+        base_c = float(r["baseline_count"])
+        change = round((pred_c - base_c) / base_c * 100, 1) if base_c > 0 else None
+        if change is None:
+            trend = None
+        elif change >= 10:
+            trend = "rising"
+        elif change <= -10:
+            trend = "declining"
+        else:
+            trend = "stable"
+        items.append({
+            "police_station":  r["police_station"],
+            "predicted_count": round(pred_c, 1),
+            "baseline_count":  round(base_c, 1),
+            "change_pct":      change,
+            "trend_label":     trend,
+        })
+
+    return {
+        "predict_week":      ctx["predict_week"],
+        "model_mae":         round(ctx["mae"], 3),
+        "precision_at":      ctx["precision_at"],
+        "median_cv":         round(ctx["median_cv"], 2),
+        "hotspot_median_cv": round(hotspot_median_cv, 2),
+        "n_stations":        len(items),
+        "forecast":          items,
+    }
+
