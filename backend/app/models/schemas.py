@@ -158,11 +158,31 @@ class CoverageCurvePoint(BaseModel):
     coverage_pct: float
 
 
+class EscalationItem(BaseModel):
+    """A hotspot whose predicted load is rising vs baseline — the forecast's
+    forward-looking signal, surfaced alongside the allocation."""
+    hotspot_id: str
+    police_station: Optional[str] = None
+    baseline_count: int
+    predicted_count: float
+    count_delta: int
+    change_pct: float
+    covered: bool                        # already staffed by the current allocation?
+
+
 class PatrolResponse(BaseModel):
     units: int
+    mode: str = "predictive"             # predictive | historical
     coverage_pct: float
     naive_coverage_pct: Optional[float] = None
     improvement_pct: Optional[float] = None
+    # Predictive impact: coverage of next week's predicted violation load.
+    # NOT a causal "prevented" claim — we have no patrol-effectiveness data.
+    predicted_violations_covered: Optional[float] = None
+    total_predicted_load: Optional[float] = None
+    pct_predicted_covered: Optional[float] = None
+    # Dual view: rising hotspots the optimizer flags for pre-positioning.
+    escalation_watch: list[EscalationItem] = []
     assignments: list[PatrolAssignment]
     coverage_curve: list[CoverageCurvePoint] = []
 

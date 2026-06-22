@@ -381,6 +381,65 @@ def _ensure_trained() -> dict[str, Any]:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def get_predicted_counts() -> pd.Series:
+    """
+    Per-hotspot predicted violation count for the next week, as a Series
+    indexed by hotspot_id.
+
+    This is the same ``predicted_count`` quantity surfaced by get_forecast()
+    (rolling mean across the clean lag weeks _CLEAN_LAG_WEEKS), exposed for the
+    patrol optimizer so it can allocate units against FUTURE predicted load
+    rather than historical counts. Both functions read the same cached panel
+    and the same _CLEAN_LAG_WEEKS constant, so the numbers stay consistent.
+
+    Hotspots with no clean-week signal get 0.0 (the optimizer blends in
+    historical risk for those).
+    """
+    ctx   = _ensure_trained()
+    panel = ctx["panel"]
+    lag_panel = panel[panel["week_ord"].isin(_CLEAN_LAG_WEEKS)]
+    return (
+        lag_panel.groupby("hotspot_id")["count"].mean().round(1).rename("predicted_count")
+    )
+
+
+def get_escalation_frame() -> pd.DataFrame:
+    """
+    Per-hotspot escalation signals for the next week, as a DataFrame keyed by
+    hotspot_id with columns: baseline_count, predicted_count, count_delta,
+    change_pct, is_escalating.
+
+    Exposed for the patrol optimizer's escalation-watch view — the hotspots
+    where FUTURE load is rising vs baseline, which a purely historical
+    allocation would under-weight. Reuses the same baseline/predicted derivation
+    as get_forecast() so the numbers stay consistent.
+    """
+    ctx   = _ensure_trained()
+    panel = ctx["panel"]
+
+    baseline_means = (
+        panel[panel["week_ord"].isin(_CLEAN_BASELINE_WEEKS)]
+        .groupby("hotspot_id")["count"].mean().round(0)
+    )
+    lag_means = (
+        panel[panel["week_ord"].isin(_CLEAN_LAG_WEEKS)]
+        .groupby("hotspot_id")["count"].mean().round(1)
+    )
+    ids = panel["hotspot_id"].unique()
+    out = pd.DataFrame(index=pd.Index(ids, name="hotspot_id"))
+    out["baseline_count"]  = baseline_means.reindex(out.index).fillna(0).astype(int)
+    out["predicted_count"] = lag_means.reindex(out.index).fillna(0.0)
+    out["count_delta"]     = (out["predicted_count"] - out["baseline_count"]).round(0).astype(int)
+    out["change_pct"]      = (
+        (out["predicted_count"] - out["baseline_count"])
+        / out["baseline_count"].clip(lower=1).astype(float) * 100
+    ).round(1)
+    # Mirror get_forecast's escalation criterion: meaningful % rise on a
+    # non-trivial baseline.
+    out["is_escalating"] = (out["change_pct"] > 15) & (out["baseline_count"] > _ESCALATION_BASELINE_FLOOR)
+    return out
+
+
 def get_forecast(top_n: int = 30) -> dict[str, Any]:
     """
     Return the top_n hotspots predicted to have the highest violation count

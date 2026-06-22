@@ -97,15 +97,20 @@ def get_forecast(
 @router.get("/patrol", response_model=PatrolResponse)
 def get_patrol(
     units: int = Query(10, ge=1, le=100, description="Number of patrol units to deploy"),
+    mode: str = Query("predictive", pattern="^(predictive|historical)$",
+                      description="predictive = allocate against forecast; historical = against past counts"),
 ):
     """
-    Patrol Deployment Optimizer.
-    Assign N patrol units to maximize high-priority coverage using greedy
-    spatial de-bunching.
+    Predictive Patrol Deployment Optimizer.
+
+    Allocates N patrol units across hotspots using greedy spatial de-bunching.
+    mode=predictive (default) ranks by next-week predicted load (with historical
+    fallback) and returns predicted-violations-covered plus an escalation watch
+    list of rising hotspots. mode=historical ranks by past counts as a baseline.
     """
     if store.hotspots.empty:
         raise HTTPException(503, "Artifacts not loaded yet")
-    return patrol_optimizer.optimize_patrol(units=units)
+    return patrol_optimizer.optimize_patrol(units=units, mode=mode)
 
 
 @router.get("/poi-stats", response_model=PoiStatsResponse)

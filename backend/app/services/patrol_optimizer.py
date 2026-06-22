@@ -6,8 +6,9 @@ import numpy as np
 import pandas as pd
 
 from backend.app.core import store
-from backend.app.models.schemas import PatrolAssignment, PatrolResponse, CoverageCurvePoint
+from backend.app.models.schemas import PatrolAssignment, PatrolResponse, CoverageCurvePoint, EscalationItem
 from backend.app.services.temporal import _format_peak_window
+from backend.app.services import forecast as forecast_service
 
 # Minimum violations needed to be considered for a patrol assignment
 _MIN_VIOLATION_COUNT = 20
@@ -44,18 +45,46 @@ def _haversine_vec(lat1: float, lon1: float, lats: np.ndarray, lngs: np.ndarray)
     return R * 2.0 * np.arctan2(np.sqrt(a), np.sqrt(1.0 - a))
 
 
-def optimize_patrol(units: int) -> PatrolResponse:
+def optimize_patrol(units: int, mode: str = "predictive") -> PatrolResponse:
+    """
+    Allocate ``units`` patrol units across hotspots.
+
+    mode="predictive" (default): rank hotspots by FUTURE predicted load —
+        priority = risk_score * predicted_count, falling back to historical
+        violation_count where the forecast has no clean-week signal (so no
+        historically-dangerous hotspot goes unstaffed). This closes the loop:
+        forecast → allocation, deploying resources against next week's problem.
+    mode="historical": rank by past load — priority = risk_score *
+        violation_count. Kept as a baseline so the dashboard can show the
+        predictive-vs-historical delta (the quantified value of forecasting).
+    """
     df = store.hotspots
     tdf = store.temporal
     if df.empty or tdf.empty:
         return PatrolResponse(units=units, coverage_pct=0.0, assignments=[])
 
-    # 1. Compute dispatch score (priority)
-    scores = df["risk_score"] * df["violation_count"]
+    df = df.copy()
     valid_mask = df["violation_count"] >= _MIN_VIOLATION_COUNT
 
+    # Attach per-hotspot predicted_count (next week) from the forecast model.
+    # Same quantity get_forecast surfaces, so the two views stay consistent.
+    try:
+        pred = forecast_service.get_predicted_counts()
+        df["predicted_count"] = df["hotspot_id"].map(pred).fillna(0.0)
+    except Exception:  # noqa: BLE001 — forecast unavailable: degrade to historical
+        df["predicted_count"] = 0.0
+
+    # 1. Compute dispatch score (priority) per mode.
+    if mode == "historical":
+        df["priority"] = df["risk_score"] * df["violation_count"]
+    else:
+        # Predictive with historical fallback where predicted_count == 0.
+        effective_count = df["predicted_count"].where(
+            df["predicted_count"] > 0, df["violation_count"]
+        )
+        df["priority"] = df["risk_score"] * effective_count
+
     work_df = df[valid_mask].copy()
-    work_df["priority"] = scores[valid_mask]
 
     total_priority = work_df["priority"].sum()
     if total_priority == 0:
@@ -70,10 +99,16 @@ def optimize_patrol(units: int) -> PatrolResponse:
     priorities = work_df["priority"].to_numpy()
     hotspot_ids = work_df["hotspot_id"].to_numpy()
     risk_scores = work_df["risk_score"].to_numpy()
+    pred_counts = work_df["predicted_count"].to_numpy()
+
+    # Total predicted load across all eligible hotspots — the denominator for
+    # "X of Y predicted violations covered".
+    total_predicted_load = float(pred_counts.sum())
 
     assignments: list[PatrolAssignment] = []
     coverage_curve: list[CoverageCurvePoint] = []
     covered_priority = 0.0
+    covered_predicted = 0.0   # sum of predicted_count over covered hotspots
     covered_mask = np.zeros(len(work_df), dtype=bool)
 
     # 2. Greedy spatial assignment with dynamic temporal window
@@ -135,6 +170,7 @@ def optimize_patrol(units: int) -> PatrolResponse:
             dists_from_pt = _haversine_vec(pt_lat, pt_lng, lats, lngs)
             newly_covered = (dists_from_pt <= _COVERAGE_RADIUS_M) & ~covered_mask
             covered_priority += priorities[newly_covered].sum()
+            covered_predicted += pred_counts[newly_covered].sum()
             covered_mask |= newly_covered
 
         current_cov_pct = round(covered_priority / total_priority * 100, 1)
@@ -156,11 +192,50 @@ def optimize_patrol(units: int) -> PatrolResponse:
     
     improvement_pct = round(((final_coverage_pct - naive_coverage_pct) / naive_coverage_pct * 100) if naive_coverage_pct else 0.0, 1)
 
+    # 4. Predictive impact metric — predicted violations covered vs total
+    #    predicted load. This is COVERAGE of predicted load, NOT a causal
+    #    "prevented" claim (we have no patrol-effectiveness data).
+    pct_predicted_covered = round(
+        (covered_predicted / total_predicted_load * 100) if total_predicted_load else 0.0, 1
+    )
+
+    # 5. Escalation watch — eligible hotspots whose FUTURE load is rising vs
+    #    baseline. Dual view: the optimizer covers predicted load (mostly stable
+    #    high-volume hotspots), while this list surfaces the few rising ones so
+    #    units can pre-position for growth. Each is tagged covered/uncovered by
+    #    the current allocation so the gap is actionable.
+    covered_ids = set(hotspot_ids[covered_mask].tolist())
+    escalation_watch = []
+    try:
+        esc = forecast_service.get_escalation_frame()
+        eligible_ids = set(work_df["hotspot_id"])
+        rising = esc[esc["is_escalating"] & esc.index.isin(eligible_ids)]
+        rising = rising.sort_values("count_delta", ascending=False)
+        station_by_id = work_df.set_index("hotspot_id")["police_station"].to_dict() \
+            if "police_station" in work_df.columns else {}
+        for hid, r in rising.iterrows():
+            escalation_watch.append(EscalationItem(
+                hotspot_id=str(hid),
+                police_station=station_by_id.get(hid),
+                baseline_count=int(r["baseline_count"]),
+                predicted_count=float(r["predicted_count"]),
+                count_delta=int(r["count_delta"]),
+                change_pct=float(r["change_pct"]),
+                covered=hid in covered_ids,
+            ))
+    except Exception:  # noqa: BLE001 — forecast unavailable: empty watch list
+        escalation_watch = []
+
     return PatrolResponse(
         units=units,
+        mode=mode,
         coverage_pct=final_coverage_pct,
         naive_coverage_pct=naive_coverage_pct,
         improvement_pct=improvement_pct,
+        predicted_violations_covered=round(covered_predicted, 1),
+        total_predicted_load=round(total_predicted_load, 1),
+        pct_predicted_covered=pct_predicted_covered,
+        escalation_watch=escalation_watch,
         assignments=final_assignments,
         coverage_curve=coverage_curve
     )
