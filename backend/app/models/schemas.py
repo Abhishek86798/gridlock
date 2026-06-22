@@ -176,11 +176,26 @@ class OffenderItem(BaseModel):
     distinct_locations: int
     top_hotspot: Optional[str] = None
     distinct_hotspots: Optional[int] = None
+    risk_tier: Optional[str] = None       # Occasional | Frequent | Habitual (K-Means)
+    frequency: Optional[float] = None     # violations per active day
+    avg_days_between: Optional[float] = None  # mean days between consecutive violations
+
+
+class TierCentroid(BaseModel):
+    """One K-Means cluster centre in real units — the 'what is a Habitual
+    offender' explainer behind the tiering."""
+    risk_tier: str
+    total_violations: float
+    frequency: float
+    avg_days_between: float
+    vehicle_count: int
 
 
 class RepeatOffendersResponse(BaseModel):
-    total_repeat_vehicles: int       # vehicles with >= 3 violations
+    total_repeat_vehicles: int       # vehicles with >= 3 violations and >= 7 active days
     pct_of_total_violations: float   # what % of all violations they account for
+    tier_counts: dict[str, int] = {}     # offenders per tier
+    centroids: list[TierCentroid] = []   # cluster centres (ML explainer)
     offenders: list[OffenderItem]
 
 

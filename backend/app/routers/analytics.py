@@ -19,31 +19,17 @@ def _to_records(df: pd.DataFrame) -> list[dict]:
 
 @router.get("/stats", response_model=StatsResponse)
 def get_stats():
-    vdf = store.violations
-    hdf = store.hotspots
-    if vdf.empty:
+    if not store.stats_cache:
         raise HTTPException(503, "Artifacts not loaded yet")
-
-    dt_col = "created_ist" if "created_ist" in vdf.columns else "created_datetime"
-    dates_raw  = vdf[dt_col].dropna()
-    dates = pd.to_datetime(dates_raw, format="mixed", errors="coerce").dropna()
-    
-    blind_spot_pct = 0.0
-    if len(dates):
-        mask = (dates.dt.hour >= 13) & (dates.dt.hour <= 16)
-        blind_spot_pct = round(float(mask.sum()) / len(dates) * 100, 1)
-
+    c = store.stats_cache
     return StatsResponse(
-        total_violations=int(len(vdf)),
-        total_hotspots=int(len(hdf)),
-        date_range={
-            "start": str(dates.min().date()) if len(dates) else "unknown",
-            "end":   str(dates.max().date()) if len(dates) else "unknown",
-        },
-        by_vehicle_type=vdf["vehicle_type"].value_counts().head(20).to_dict(),
-        by_violation_type=vdf["primary_violation_type"].value_counts().head(20).to_dict(),
-        by_police_station=vdf["police_station"].value_counts().head(20).to_dict(),
-        blind_spot_pct=blind_spot_pct,
+        total_violations=c["total_violations"],
+        total_hotspots=c["total_hotspots"],
+        date_range={"start": c["date_start"], "end": c["date_end"]},
+        by_vehicle_type=c["by_vehicle_type"],
+        by_violation_type=c["by_violation_type"],
+        by_police_station=c["by_police_station"],
+        blind_spot_pct=c["blind_spot_pct"],
     )
 
 
@@ -186,9 +172,33 @@ def get_repeat_offenders(limit: int = Query(20, ge=1, le=100)):
     if rdf.empty:
         raise HTTPException(503, "Repeat-offender artifacts not loaded yet")
 
+    # The pipeline writes total_violations (not violation_count) — keep this
+    # tolerant so a stale artifact doesn't 500 the endpoint.
+    count_col = "total_violations" if "total_violations" in rdf.columns else "violation_count"
+
     total_violations = len(store.violations)
     total_repeat_vehicles = len(rdf)
-    repeat_violation_sum = int(rdf["violation_count"].sum())
+    repeat_violation_sum = int(rdf[count_col].sum())
+
+    # Tier rollup + centroid explainer (the ML-credibility artifact). Centroids
+    # are the per-tier mean of the three behavioural axes the model clusters on.
+    tier_counts: dict[str, int] = {}
+    centroids = []
+    if "risk_tier" in rdf.columns:
+        tier_counts = {str(k): int(v) for k, v in rdf["risk_tier"].value_counts().items()}
+        _TIER_ORDER = {"Occasional": 0, "Frequent": 1, "Habitual": 2}
+        grp = rdf.groupby("risk_tier")
+        rows = []
+        for tier, g in grp:
+            rows.append({
+                "risk_tier": str(tier),
+                "total_violations": round(float(g[count_col].mean()), 2),
+                "frequency": round(float(g["frequency"].mean()), 3),
+                "avg_days_between": round(float(g["avg_days_between"].mean()), 2),
+                "vehicle_count": int(len(g)),
+            })
+        rows.sort(key=lambda r: _TIER_ORDER.get(r["risk_tier"], 99))
+        centroids = rows
 
     top = rdf.head(limit).copy()
     # Use masked vehicle numbers for the API response
@@ -198,16 +208,21 @@ def get_repeat_offenders(limit: int = Query(20, ge=1, le=100)):
     for _, row in top.iterrows():
         offenders.append({
             "vehicle_number": row[plate_col],
-            "violation_count": int(row["violation_count"]),
+            "violation_count": int(row[count_col]),
             "top_location": row.get("top_location", "Unknown"),
             "distinct_locations": int(row.get("distinct_locations", 1)),
             "top_hotspot": row.get("top_hotspot"),
             "distinct_hotspots": int(row["distinct_hotspots"]) if pd.notna(row.get("distinct_hotspots")) else None,
+            "risk_tier": row.get("risk_tier"),
+            "frequency": round(float(row["frequency"]), 3) if pd.notna(row.get("frequency")) else None,
+            "avg_days_between": round(float(row["avg_days_between"]), 2) if pd.notna(row.get("avg_days_between")) else None,
         })
 
     return RepeatOffendersResponse(
         total_repeat_vehicles=total_repeat_vehicles,
         pct_of_total_violations=round(repeat_violation_sum / total_violations * 100, 2) if total_violations else 0.0,
+        tier_counts=tier_counts,
+        centroids=centroids,
         offenders=offenders,
     )
 

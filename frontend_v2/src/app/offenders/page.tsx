@@ -43,6 +43,26 @@ export default function RepeatOffendersPage() {
   const offenders = data?.offenders || [];
   const totalRepeat = data?.total_repeat_vehicles || 0;
   const pctOfTotal = data?.pct_of_total_violations || 0;
+  const centroids = data?.centroids || [];
+
+  // Tier → badge styling. Ordered least → most concerning.
+  const tierStyle: Record<string, string> = {
+    Occasional: "bg-text-primary/5 text-text-secondary border-border",
+    Frequent: "bg-amber-900/30 text-amber-400 border-amber-500/40",
+    Habitual: "bg-critical/15 text-critical border-critical/40",
+  };
+  const tierBadge = (tier?: string) =>
+    tier ? (
+      <span
+        className={`px-2.5 py-1 rounded text-[10px] font-medium tracking-widest uppercase border ${
+          tierStyle[tier] ?? tierStyle.Occasional
+        }`}
+      >
+        {tier}
+      </span>
+    ) : (
+      <span className="text-text-muted">-</span>
+    );
 
   // Concentration stat: top 10 offenders' share
   const top10Sum = offenders
@@ -51,10 +71,12 @@ export default function RepeatOffendersPage() {
 
   const exportCSV = () => {
     if (!offenders.length) return;
-    const headers = ["Vehicle ID", "Violations", "Top Station", "Top Hotspot", "Distinct Locations", "Distinct Hotspots"];
+    const headers = ["Vehicle ID", "Risk Tier", "Violations", "Reoffend Gap (days)", "Top Station", "Top Hotspot", "Distinct Locations", "Distinct Hotspots"];
     const rows = offenders.map((row: any) => [
       row.vehicle_number,
+      row.risk_tier ?? "",
       row.violation_count,
+      row.avg_days_between ?? "",
       `"${row.top_location}"`,
       row.top_hotspot,
       row.distinct_locations,
@@ -108,7 +130,7 @@ export default function RepeatOffendersPage() {
             {totalRepeat.toLocaleString()}
           </div>
           <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
-            vehicles with ≥2 violations
+            vehicles with ≥3 violations over ≥7 days
           </div>
         </div>
 
@@ -170,6 +192,46 @@ export default function RepeatOffendersPage() {
         </div>
       </div>
 
+      {/* Behavioural tiers — K-Means cluster centroids (ML explainer) */}
+      {centroids.length > 0 && (
+        <div>
+          <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">
+            Behavioural Tiers
+          </h2>
+          <p className="text-text-secondary font-light text-xs tracking-wide max-w-2xl mb-6">
+            K-Means clusters offenders on three behavioural signals — volume,
+            frequency, and reoffend interval. Tiers are ranked, not thresholded:
+            Frequent = intense but short-lived; Habitual = sustained high volume.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {centroids.map((c: any) => (
+              <div key={c.risk_tier} className="bg-transparent border border-border p-8">
+                <div className="flex items-center justify-between mb-6">
+                  {tierBadge(c.risk_tier)}
+                  <span className="text-[10px] text-text-secondary tracking-wide">
+                    {c.vehicle_count.toLocaleString()} vehicles
+                  </span>
+                </div>
+                <dl className="space-y-3 text-xs">
+                  <div className="flex justify-between">
+                    <dt className="text-text-secondary tracking-wide">Avg violations</dt>
+                    <dd className="text-text-primary font-light">{c.total_violations.toFixed(1)}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-text-secondary tracking-wide">Per day</dt>
+                    <dd className="text-text-primary font-light">{c.frequency.toFixed(2)}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-text-secondary tracking-wide">Reoffend gap</dt>
+                    <dd className="text-text-primary font-light">{c.avg_days_between.toFixed(1)} days</dd>
+                  </div>
+                </dl>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div>
         <div className="flex justify-between items-end mb-6">
@@ -188,7 +250,9 @@ export default function RepeatOffendersPage() {
             <tr>
               <th className="px-8 py-6">#</th>
               <th className="px-8 py-6">Vehicle ID</th>
+              <th className="px-8 py-6">Tier</th>
               <th className="px-8 py-6 text-right">Violations</th>
+              <th className="px-8 py-6 text-right">Gap (days)</th>
               <th className="px-8 py-6">Top Station</th>
               <th className="px-8 py-6">Top Hotspot</th>
               <th className="px-8 py-6 text-right">Locations</th>
@@ -205,8 +269,14 @@ export default function RepeatOffendersPage() {
                 <td className="px-8 py-6 font-mono text-text-primary text-xs">
                   {row.vehicle_number}
                 </td>
+                <td className="px-8 py-6">
+                  {tierBadge(row.risk_tier)}
+                </td>
                 <td className="px-8 py-6 text-right font-light text-text-primary">
                   {row.violation_count}
+                </td>
+                <td className="px-8 py-6 text-right text-text-secondary font-light">
+                  {row.avg_days_between != null ? row.avg_days_between.toFixed(1) : "-"}
                 </td>
                 <td className="px-8 py-6 text-text-secondary font-light">
                   {row.top_location}
@@ -238,7 +308,7 @@ export default function RepeatOffendersPage() {
             {offenders.length === 0 && (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={9}
                   className="px-8 py-12 text-center text-text-secondary font-light tracking-wide"
                 >
                   No repeat-offender data available.
