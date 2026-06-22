@@ -11,7 +11,7 @@ Trinetra is an end to end intelligence platform that converts raw parking violat
 *   **H3 hexbin hotspot detection:** Partitions Bengaluru into resolution-9 cells (approximately 174 m edge) and aggregates violations per cell, producing a ranked list of hotspot zones.
 *   **Composite congestion-risk score:** Assigns each hotspot a 0-100 impact index from four documented components: violation severity, log-normalised density, vehicle blocking weight, and junction-proximity bonus.
 *   **Temporal analysis:** Builds hour-of-day by day-of-week count matrices per hotspot and exposes them as heatmaps. Treats all timestamps as logging-activity signals, not as violation-occurrence times (see Limitations).
-*   **Afternoon enforcement blind-spot detection:** Computes the fraction of violations logged between 13:00 and 16:00 IST across each station. Near-zero values confirm a near-total absence of afternoon enforcement.
+*   **Afternoon enforcement blind-spot detection:** Computes the fraction of violations logged between 13:00 and 16:59 IST across each station. Near-zero values confirm a near-total absence of afternoon enforcement.
 *   **Weekly escalation forecasting:** An XGBoost count:poisson model trained on lag features, a 4-week rolling mean, and static hotspot attributes predicts next-week violation counts per hotspot. Escalating hotspots are flagged by percentage change and absolute volume tier.
 *   **Greedy spatial patrol optimiser:** Given N units, assigns each unit to the highest-priority uncovered hotspot and extends the route to up to four nearby stops within 2 km using a nearest-neighbour ordering. Hotspots within 1 km of any route point are marked covered.
 *   **POI spillover tagging:** Keyword-matches officer-logged location text to classify each hotspot into one of four categories: sensitive (schools, hospitals), metro, commercial, or transit. No external geofencing database is used.
@@ -27,7 +27,7 @@ flowchart TD
         A[Raw Violations CSV] --> B[Data Cleaning & Filtering]
         B --> C[Feature Engineering]
         C --> D[H3 Hexbin Aggregation]
-        D --> E[(Artifacts .feather)]
+        D --> E[(Artifacts .parquet)]
     end
 
     subgraph Backend Services
@@ -102,17 +102,17 @@ The patrol optimiser ranks hotspots by `priority = risk_score x violation_count`
 
 ### Timestamp Logging vs. Occurrence
 
-A critical finding from the data: `created_datetime` records when the enforcement officer logged the violation, not when the vehicle was parked. The dataset shows near-zero afternoon logging (13:00-16:00 IST) city-wide. This does not mean parking violations stop in the afternoon; it means enforcement officers are not logging in that window (shift patterns, junction-management duties, etc.).
+A critical finding from the data: `created_datetime` records when the enforcement officer logged the violation, not when the vehicle was parked. The dataset shows near-zero afternoon logging (13:00-16:59 IST) city-wide. This does not mean parking violations stop in the afternoon; it means enforcement officers are not logging in that window (shift patterns, junction-management duties, etc.).
 
 All temporal analysis in this system is therefore labelled as logging coverage, not demand signal. `morning_log_pct` and `afternoon_log_pct` are coverage metrics. The `logging_window` label (`morning`, `overnight`, `split`, `afternoon`) describes when officers log, not when violations occur. Forecasts use these features as enforcement-activity proxies, not as parking-demand estimates.
 
 ## Model Performance
 
-| Metric | XGBoost Model | Rolling Mean Baseline | Naive Baseline |
+| Metric | XGBoost Model | Rolling Mean Baseline | Last-Week Naive |
 | :--- | :--- | :--- | :--- |
 | **MAE** | 5.26 | 5.25 | 6.17 |
-| **Precision@10** | 0.60 | N/A (Not Tracked) | N/A (Not Tracked) |
-| **Precision@20** | 0.60 | N/A (Not Tracked) | N/A (Not Tracked) |
+| **Precision@10** | 0.60 | 0.00 | 0.20 |
+| **Precision@20** | 0.60 | 0.00 | 0.20 |
 
 *(Note: Results evaluated on clean holdout W03-W04)*
 
@@ -218,5 +218,5 @@ All endpoints return JSON. Base URL defaults to `http://127.0.0.1:8000`.
 
 ## Privacy and Data Handling
 
-Vehicle numbers in the source dataset are synthetic anonymised identifiers provided by HackerEarth for the hackathon. They do not represent real vehicle registration plates. All API endpoints that return vehicle numbers apply an additional PII mask (e.g. `KA01AB****23`) before serving the response. No real personally identifiable information is stored, processed, or transmitted by this system.
+Vehicle numbers in the source dataset are synthetic anonymised identifiers provided by HackerEarth for the hackathon. They do not represent real vehicle registration plates. All API endpoints that return vehicle numbers apply an additional PII mask (e.g. `FKN00G****63`) before serving the response. No real personally identifiable information is stored, processed, or transmitted by this system.
  
