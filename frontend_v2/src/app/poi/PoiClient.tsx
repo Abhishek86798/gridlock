@@ -2,17 +2,48 @@
 
 import { useState } from "react";
 import MapWrapper from "@/components/MapWrapper";
-import { Train } from "lucide-react";
+import { Train, Building2, AlertTriangle, Bus, MapPin } from "lucide-react";
 
 export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots: any[] }) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const metroCategory = stats.find((c) => c.poi_category === "metro");
+  const activeCategoryStr = selectedCategory || "metro";
+  const activeCategory = stats.find((c) => c.poi_category === activeCategoryStr);
   const totalViolations = stats.reduce((sum, c) => sum + c.total_violations, 0);
-  const metroShare =
-    metroCategory && totalViolations > 0
-      ? ((metroCategory.total_violations / totalViolations) * 100).toFixed(1)
+  const activeShare =
+    activeCategory && totalViolations > 0
+      ? ((activeCategory.total_violations / totalViolations) * 100).toFixed(1)
       : null;
+
+  const getCategoryTitle = (cat: string) => {
+    switch (cat) {
+      case "metro": return "Metro Station Effect";
+      case "commercial": return "Commercial Center Effect";
+      case "sensitive": return "Sensitive Area Effect";
+      case "transit": return "Transit Hub Effect";
+      default: return `${cat} Effect`;
+    }
+  };
+
+  const getCategorySubtitle = (cat: string) => {
+    switch (cat) {
+      case "metro": return "of all violations occur within 500m of a metro station";
+      case "commercial": return "of all violations occur near commercial centers";
+      case "sensitive": return "of all violations occur near schools or hospitals";
+      case "transit": return "of all violations occur near bus stops or transit hubs";
+      default: return `of all violations occur near ${cat} locations`;
+    }
+  };
+
+  const CategoryIcon = ({ cat }: { cat: string }) => {
+    switch (cat) {
+      case "metro": return <Train size={14} className="text-text-primary" strokeWidth={1} />;
+      case "commercial": return <Building2 size={14} className="text-text-primary" strokeWidth={1} />;
+      case "sensitive": return <AlertTriangle size={14} className="text-text-primary" strokeWidth={1} />;
+      case "transit": return <Bus size={14} className="text-text-primary" strokeWidth={1} />;
+      default: return <MapPin size={14} className="text-text-primary" strokeWidth={1} />;
+    }
+  };
 
   return (
     <div className="flex h-screen bg-bg-base overflow-hidden">
@@ -26,19 +57,19 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
             </p>
           </header>
 
-          {metroShare !== null && (
+          {activeShare !== null && (
             <div className="bg-transparent border border-border p-6 mb-8">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">
-                  Metro Station Effect
+                  {getCategoryTitle(activeCategoryStr)}
                 </div>
-                <Train size={14} className="text-text-primary" strokeWidth={1} />
+                <CategoryIcon cat={activeCategoryStr} />
               </div>
               <div className="text-4xl font-light text-text-primary tracking-tight">
-                {metroShare}%
+                {activeShare}%
               </div>
               <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
-                of all violations occur within 500m of a metro station
+                {getCategorySubtitle(activeCategoryStr)}
               </div>
             </div>
           )}
