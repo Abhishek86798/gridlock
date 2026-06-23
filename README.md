@@ -143,11 +143,14 @@ Station-level forecast (53 stations, reg:squarederror): Precision@10 0.80, media
 
 
 **Live Map & Route Optimizer**
-<img width="1914" height="862" alt="image" src="https://github.com/user-attachments/assets/84e7ebbc-a294-42e3-8a5b-f4d49c49e19f" />
+<img width="1533" height="767" alt="image" src="https://github.com/user-attachments/assets/676ce417-8344-4090-ba7e-5cc8a02ad40b" />
+
+
 
 
 **Repeat Offenders Tracking**
-<img width="1900" height="862" alt="image" src="https://github.com/user-attachments/assets/6bfcf28d-7527-4d24-ac35-d3e0cc862a83" />
+<img width="1532" height="768" alt="image" src="https://github.com/user-attachments/assets/b00de27a-dbe2-4579-915b-cfcc892c8b8f" />
+
 
 
 ## Installation and Setup
