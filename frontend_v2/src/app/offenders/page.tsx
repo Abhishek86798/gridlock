@@ -291,7 +291,7 @@ export default function RepeatOffendersPage() {
                           : 'bg-text-primary/5 hover:bg-text-primary/10 border-border'
                       }`}
                     >
-                      {watchlist.includes(row.top_hotspot) ? 'Pinned' : 'Pin'} {row.top_hotspot}
+                      {watchlist.includes(row.top_hotspot) ? 'Tracking ✓' : 'Track on Map'} {row.top_hotspot}
                     </button>
                   ) : (
                     "-"

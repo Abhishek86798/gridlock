@@ -47,9 +47,9 @@ export default function TemporalPage() {
     <div className="p-12 max-w-7xl mx-auto space-y-12 bg-bg-base min-h-screen">
       <header className="flex justify-between items-end">
         <div className="space-y-4">
-          <h1 className="text-5xl font-light tracking-tight text-text-primary">TEMPORAL DIST</h1>
-          <p className="text-text-secondary font-light text-sm tracking-wide">
-            Violation counts by hour and weekday for specific hotspots
+          <h1 className="text-5xl font-light tracking-tight text-text-primary">VIOLATION TIMING</h1>
+          <p className="text-text-secondary font-light text-sm tracking-wide max-w-lg">
+            Select a hotspot to see which hours and days see the most violations. Darker red = more violations. Use this to set patrol shift times.
           </p>
         </div>
         <div className="border border-border px-6 py-4 flex items-center gap-6">
@@ -68,7 +68,34 @@ export default function TemporalPage() {
         </div>
       </header>
 
+      {/* Peak window callout */}
+      {matrix.length > 0 && (() => {
+        const sorted = [...matrix].sort((a, b) => b.count - a.count).slice(0, 3);
+        const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        return (
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="text-[10px] text-text-secondary uppercase tracking-widest shrink-0">Peak windows:</span>
+            {sorted.map((c, i) => (
+              <span key={i} className="text-[10px] font-light text-critical bg-critical/10 px-3 py-1">
+                {dayNames[c.day_of_week]} {c.hour.toString().padStart(2, '0')}:00–{(c.hour + 1).toString().padStart(2, '0')}:00
+              </span>
+            ))}
+          </div>
+        );
+      })()}
+
       <div className="border border-border p-8 overflow-x-auto relative">
+        {/* Color scale legend */}
+        <div className="flex items-center gap-3 mb-6 text-[10px] text-text-secondary">
+          <span>Fewer violations</span>
+          <div className="flex gap-0.5">
+            {[0.1, 0.3, 0.5, 0.7, 0.9].map(v => (
+              <div key={v} className="w-6 h-4" style={{ backgroundColor: `rgba(239,68,68,${v * 0.8})` }} />
+            ))}
+          </div>
+          <span>More violations</span>
+        </div>
+
         {loading && (
           <div className="absolute inset-0 bg-bg-base/80 backdrop-blur-sm flex items-center justify-center z-10">
             <span className="text-text-muted animate-pulse font-light tracking-[0.2em] uppercase text-[10px]">Loading Data...</span>
@@ -107,6 +134,9 @@ export default function TemporalPage() {
           </tbody>
         </table>
       </div>
+      <p className="text-[10px] text-text-secondary font-light tracking-wide">
+        Use peak hours from this hotspot to time patrol shifts on the Patrol Deployment page.
+      </p>
     </div>
   );
 }

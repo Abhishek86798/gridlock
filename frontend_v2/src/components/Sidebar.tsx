@@ -67,7 +67,7 @@ export function Sidebar() {
     { href: "/forecast", label: "Forecasts", icon: TrendingUp },
     { href: "/deploy", label: "Patrol Deployment", icon: ShieldAlert },
     { href: "/poi", label: "POI Spillover", icon: MapPin },
-    { href: "/temporal", label: "Temporal Dist.", icon: Filter },
+    { href: "/temporal", label: "Violation Timing", icon: Filter },
     { href: "/stations", label: "Stations", icon: Building2 },
     { href: "/junctions", label: "Junctions", icon: GitMerge },
     { href: "/offenders", label: "Repeat Offenders", icon: Users },
