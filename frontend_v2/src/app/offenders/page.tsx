@@ -244,19 +244,19 @@ export default function RepeatOffendersPage() {
             <Download size={14} /> Export CSV
           </button>
         </div>
-        <div className="border border-border overflow-hidden">
-          <table className="w-full text-sm text-left">
+        <div className="border border-border overflow-x-auto">
+          <table className="w-full text-sm text-left whitespace-nowrap">
           <thead className="text-[10px] text-text-secondary uppercase tracking-[0.2em] font-medium border-b border-border bg-text-primary/5">
             <tr>
-              <th className="px-8 py-6">#</th>
-              <th className="px-8 py-6">Vehicle ID</th>
-              <th className="px-8 py-6">Tier</th>
-              <th className="px-8 py-6 text-right">Violations</th>
-              <th className="px-8 py-6 text-right">Gap (days)</th>
-              <th className="px-8 py-6">Top Station</th>
-              <th className="px-8 py-6">Top Hotspot</th>
-              <th className="px-8 py-6 text-right">Locations</th>
-              <th className="px-8 py-6 text-right">Hotspots</th>
+              <th className="px-4 py-4">#</th>
+              <th className="px-4 py-4">Vehicle ID</th>
+              <th className="px-4 py-4">Tier</th>
+              <th className="px-4 py-4 text-right">Violations</th>
+              <th className="px-4 py-4 text-right">Gap (days)</th>
+              <th className="px-4 py-4">Top Station</th>
+              <th className="px-4 py-4">Top Hotspot</th>
+              <th className="px-4 py-4 text-right">Locations</th>
+              <th className="px-4 py-4 text-right">Hotspots</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -265,42 +265,45 @@ export default function RepeatOffendersPage() {
                 key={`${row.vehicle_number}-${i}`}
                 className="hover:bg-text-primary/5 transition-colors"
               >
-                <td className="px-8 py-6 text-text-muted">{i + 1}</td>
-                <td className="px-8 py-6 font-mono text-text-primary text-xs">
+                <td className="px-4 py-4 text-text-muted">{i + 1}</td>
+                <td className="px-4 py-4 font-mono text-text-primary text-xs">
                   {row.vehicle_number}
                 </td>
-                <td className="px-8 py-6">
+                <td className="px-4 py-4">
                   {tierBadge(row.risk_tier)}
                 </td>
-                <td className="px-8 py-6 text-right font-light text-text-primary">
+                <td className="px-4 py-4 text-right font-light text-text-primary">
                   {row.violation_count}
                 </td>
-                <td className="px-8 py-6 text-right text-text-secondary font-light">
+                <td className="px-4 py-4 text-right text-text-secondary font-light">
                   {row.avg_days_between != null ? row.avg_days_between.toFixed(1) : "-"}
                 </td>
-                <td className="px-8 py-6 text-text-secondary font-light">
+                <td className="px-4 py-4 text-text-secondary font-light">
                   {row.top_location}
                 </td>
-                <td className="px-8 py-6 text-text-secondary font-light">
+                <td className="px-4 py-4">
                   {row.top_hotspot ? (
-                    <button 
-                      onClick={() => handlePin(row.top_hotspot)}
-                      className={`px-3 py-1.5 rounded transition-colors text-xs font-medium tracking-widest uppercase border ${
-                        watchlist.includes(row.top_hotspot) 
-                          ? 'bg-fuchsia-900/40 text-fuchsia-400 border-fuchsia-500/50' 
-                          : 'bg-text-primary/5 hover:bg-text-primary/10 border-border'
-                      }`}
-                    >
-                      {watchlist.includes(row.top_hotspot) ? 'Tracking ✓' : 'Track on Map'} {row.top_hotspot}
-                    </button>
+                    <div className="flex flex-col items-start gap-0.5">
+                      <span className="font-mono text-text-primary text-sm">{row.top_hotspot}</span>
+                      <button 
+                        onClick={() => handlePin(row.top_hotspot)}
+                        className={`text-[10px] uppercase tracking-widest hover:underline transition-colors ${
+                          watchlist.includes(row.top_hotspot) 
+                            ? 'text-fuchsia-400' 
+                            : 'text-text-muted hover:text-text-primary'
+                        }`}
+                      >
+                        {watchlist.includes(row.top_hotspot) ? 'Tracking ✓' : 'Track on Map'}
+                      </button>
+                    </div>
                   ) : (
-                    "-"
+                    <span className="text-text-secondary font-light">-</span>
                   )}
                 </td>
-                <td className="px-8 py-6 text-right text-text-primary font-light">
+                <td className="px-4 py-4 text-right text-text-primary font-light">
                   {row.distinct_locations}
                 </td>
-                <td className="px-8 py-6 text-right text-text-primary font-light">
+                <td className="px-4 py-4 text-right text-text-primary font-light">
                   {row.distinct_hotspots}
                 </td>
               </tr>
@@ -309,7 +312,7 @@ export default function RepeatOffendersPage() {
               <tr>
                 <td
                   colSpan={9}
-                  className="px-8 py-12 text-center text-text-secondary font-light tracking-wide"
+                  className="px-4 py-12 text-center text-text-secondary font-light tracking-wide"
                 >
                   No repeat-offender data available.
                 </td>

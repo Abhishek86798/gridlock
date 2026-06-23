@@ -46,14 +46,16 @@ function DeployContent() {
       row.risk_score?.toFixed(1),
       row.time_window
     ]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e: any[]) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = [headers.join(","), ...rows.map((e: any[]) => e.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", `trinetra_patrol_roster_${units}_units.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -70,11 +72,11 @@ function DeployContent() {
     <div className="p-12 max-w-7xl mx-auto space-y-12 bg-bg-base min-h-screen">
       <header className="space-y-4">
         <h1 className="text-5xl font-light tracking-tight text-text-primary">DEPLOYMENT</h1>
-        <p className="text-text-secondary font-light text-sm tracking-wide max-w-2xl">
-          Units are allocated against next week&apos;s <span className="text-text-primary">predicted</span> load,
-          then spread with greedy spatial de-bunching. The forecast agrees with history ~95% — the dangerous
-          hotspots are stably dangerous — so the value isn&apos;t a higher coverage number; it&apos;s the
-          <span className="text-critical"> Escalation Watch</span> below, which flags the rising hotspots a
+        <p className="text-text-secondary font-light text-sm tracking-wide max-w-4xl leading-relaxed">
+          Units are allocated against next week&apos;s <span className="text-text-primary">predicted</span>{" "}
+          load, then spread with greedy spatial de-bunching. The forecast agrees with history ~95% — the dangerous
+          hotspots are stably dangerous — so the value isn&apos;t a higher coverage number; it&apos;s the{" "}
+          <span className="text-critical">Escalation Watch</span> below, which flags the rising hotspots a
           history-only allocation under-weights.
         </p>
       </header>
@@ -111,9 +113,9 @@ function DeployContent() {
         <h2 className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-6">Coverage Efficiency</h2>
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={coverageCurve} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <LineChart data={coverageCurve} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2F333D" vertical={false} />
-              <XAxis dataKey="units" stroke="#9CA3AF" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickMargin={10} label={{ value: 'Patrol Units', position: 'insideBottom', offset: -5, fill: '#9CA3AF', fontSize: 11 }} />
+              <XAxis dataKey="units" stroke="#9CA3AF" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickMargin={10} label={{ value: 'Patrol Units', position: 'insideBottom', offset: -15, fill: '#9CA3AF', fontSize: 11 }} />
               <YAxis stroke="#9CA3AF" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickMargin={10} domain={[0, 100]} label={{ value: 'Hotspot Coverage %', angle: -90, position: 'insideLeft', fill: '#9CA3AF', fontSize: 11 }} />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#000', borderColor: '#222', color: '#fff' }}
