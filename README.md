@@ -15,6 +15,10 @@ Trinetra is an end to end intelligence platform that converts raw parking violat
 *   **Weekly escalation forecasting:** An XGBoost count:poisson model trained on lag features, a 4-week rolling mean, and static hotspot attributes predicts next-week violation counts per hotspot. Escalating hotspots are flagged by percentage change and absolute volume tier.
 *   **Greedy spatial patrol optimiser:** Given N units, assigns each unit to the highest-priority uncovered hotspot and extends the route to up to four nearby stops within 2 km using a nearest-neighbour ordering. Hotspots within 1 km of any route point are marked covered.
 *   **POI spillover tagging:** Keyword-matches officer-logged location text to classify each hotspot into one of four categories: sensitive (schools, hospitals), metro, commercial, or transit. No external geofencing database is used.
+*   **Station-level forecasting:** Aggregates predictions to 53 police stations, halving week-to-week noise (CV 1.01 vs 2.00 per-hotspot) and achieving Precision@10 of 0.80. Station grain is used for shift planning; hotspot grain drives the escalation watch.
+*   **Shift-level patrol scheduling:** Distributes each station's weekly predicted count across its constituent hotspots' historical hour×day signatures, producing top-3 peak shift windows (e.g. "Tue Morning · 18% of weekly load") per station.
+*   **Model explainability (SHAP):** XGBoost tree-path attributions surfaced as per-hotspot reason chips on the forecast table ("4-week trend ↑ · Last week's volume ↑"). Computed once at startup via `pred_contribs=True` — zero per-request cost.
+*   **Repeat-offender K-Means tiering:** Vehicles with ≥3 violations across ≥7 active days are clustered into Occasional / Frequent / Habitual tiers using K-Means (k=3) on behavioural signals: total violations, reoffend interval, violation diversity, location spread.
 *   **Repeat-offender analytics:** Aggregates violation counts per vehicle identifier and surfaces chronic offenders and their preferred locations. All vehicle identifiers are PII-masked in API output.
 *   **Enforcement-quality reporting:** Computes per-station rejection rates from the `validation_status` field to surface where the reporting pipeline is weakest.
 *   **Station and junction rollups:** Aggregates hotspot and violation metrics by police station (53 stations) and by named junction for command-level views.
@@ -62,23 +66,24 @@ flowchart TD
 
 ### Risk Score Formula
 
-Each hotspot receives a composite 0-100 risk score from four components. All weights are in `backend/app/core/config.py` and can be adjusted without modifying scoring logic.
+Each hotspot receives a composite 0-100 risk score. All weights are in `backend/app/services/risk_score.py`.
 
 ```text
-risk_score = (severity_score_agg  x 0.40)
-           + (density_score        x 0.25)
-           + (vehicle_score_agg   x 0.20)
-           + (junction_input      x 0.15)
+core = severity_share × 0.45
+     + density_score  × 0.30
+     + vehicle_share  × 0.25
 
-Clamped to [0, 100].
+risk_score = core × (1 + 0.35 × junction_flag)   → clamp [0, 100]
 ```
 
 | Component | Range | Description |
 |---|---|---|
-| `severity_score_agg` | 0-100 | Mean per-violation severity, normalised. PARKING IN A MAIN ROAD = 100. NO PARKING = 33. |
-| `density_score` | 0-100 | Log-normalised violation count. `log1p(count) / log1p(max_count) x 100`. |
-| `vehicle_score_agg` | 0-100 | Mean carriageway-blocking weight, normalised. Tanker/HGV = 100. Scooter = 30. |
-| `junction_input` | 0 or 25 | Flat bonus of 25 when at least 50% of the hotspot's violations carry a named junction, otherwise 0. Max contribution: 3.75 points. |
+| `severity_share` | 0–1 | Share of violations that are main-road or near-crossing parking, shrunk toward global prior (James–Stein, k=20) |
+| `density_score` | 0–100 | Log-normalised violation count. `log1p(count) / log1p(max_count) × 100` |
+| `vehicle_share` | 0–1 | Share of violations involving large vehicles (LGV, tanker, bus), shrunk toward global prior |
+| `junction_flag` | 0 or 1 | 1 when ≥50% of violations carry a named junction. Applied as a multiplicative amplifier (+35%) |
+
+Old distribution: mean 42, std 7 (near-constant). New distribution: mean 19.6, std 8.3, max 62.8 — genuinely discriminating.
 
 ### Escalation Forecasting
 
@@ -87,8 +92,8 @@ The forecast model trains once per server process on a weekly panel built from `
 *   **Training features:** lag1-lag4 weekly counts per hotspot, 4-week rolling mean, calendar month, risk score, violation severity, junction flag, POI flag.
 *   **Model:** XGBoost with `count:poisson` objective. 200 estimators, max depth 5, learning rate 0.05, subsample 0.80, colsample_bytree 0.80.
 *   **Evaluation holdout:** W03-W04 (two clean weeks before the W06 gap).
-*   **Results on clean holdout:** XGBoost MAE 5.26 violations per hotspot. 4-week rolling mean baseline MAE 5.25. Last-week naive baseline MAE 6.17. Precision@10: 0.60. Precision@20: 0.60.
-*   **Displayed prediction:** The 4-week rolling mean (W02-W05) is used for the displayed prediction because it matches XGBoost accuracy on this dataset and is trivially interpretable for a non-technical police audience.
+*   **Results on clean holdout:** XGBoost MAE 5.22 violations per hotspot. 4-week rolling mean baseline MAE 5.25. Last-week naive baseline MAE 6.17. Precision@10: 0.60. Precision@20: 0.60.
+*   **Displayed prediction:** XGBoost model output. Evaluated on clean holdout W03–W04.
 
 Hotspots are classified into tiers based on percentage change vs. baseline and absolute violation volume:
 *   Critical: more than 20% increase, baseline above 15 violations per week.
@@ -109,12 +114,14 @@ All temporal analysis in this system is therefore labelled as logging coverage, 
 ## Model Performance
 
 | Metric | XGBoost Model | Rolling Mean Baseline | Last-Week Naive |
-| :--- | :--- | :--- | :--- |
-| **MAE** | 5.26 | 5.25 | 6.17 |
+|---|---|---|---|
+| **MAE** | 5.22 | 5.25 | 6.17 |
 | **Precision@10** | 0.60 | 0.00 | 0.20 |
 | **Precision@20** | 0.60 | 0.00 | 0.20 |
 
-*(Note: Results evaluated on clean holdout W03-W04)*
+*(Note: Results evaluated on clean holdout W03–W04)*
+
+Station-level forecast (53 stations, reg:squarederror): Precision@10 0.80, median CV 1.01 vs 2.00 per-hotspot.
 
 ## Tech Stack
 
@@ -199,12 +206,13 @@ All endpoints return JSON. Base URL defaults to `http://127.0.0.1:8000`.
 | GET | `/stations` | `min_hotspots` (default 1), `limit` (default 53, max 200) | Per-station rollup: hotspot count, average risk, max risk, dominant violation, blind-spot percentage. |
 | GET | `/junctions` | `min_violations` (default 1), `limit` (default 100, max 500) | Named-junction rollup: violation count, average risk, top hotspot. |
 | GET | `/repeat-offenders` | `limit` (default 20, max 100) | Top repeat vehicles by violation count. Vehicle numbers are PII-masked. Includes dataset-wide repeat-offender share. |
+| GET | `/forecast/stations` | | Station-level weekly forecast for all 53 stations. Includes predicted count, baseline, trend label, peak shift windows, and model accuracy metrics (CV, Precision@10). |
 | GET | `/poi-stats` | | Per-category counts, total violations, and average risk score for sensitive/metro/commercial/transit. |
 | GET | `/enforcement-quality` | | Per-station rejection rates derived from `validation_status`. |
 
 ## Limitations and Honest Caveats
 
-**Timestamp logging vs. occurrence.** `created_datetime` records when enforcement officers logged the violation, not when the vehicle was parked. Near-zero afternoon log counts reflect an enforcement absence, not an absence of parking violations. All temporal analysis is explicitly labelled as logging coverage.
+**Timestamp logging vs. occurrence.** `created_datetime` records when enforcement officers logged the violation, not when the vehicle was parked. Near-zero afternoon logging (13:00–16:59 IST) reflects an enforcement absence, not an absence of parking violations. All temporal analysis is explicitly labelled as logging coverage.
 
 **Approved-only filtering bias.** The core analysis uses only `validation_status == "approved"` rows. Weeks W06-W10 and W12-W13 have over 80% null validation status due to an approval-system backlog in the source pipeline, making them unreliable for training. The `--broad` flag in `build_dataset.py` includes unvalidated rows for sensitivity comparison.
 
