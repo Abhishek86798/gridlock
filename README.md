@@ -139,7 +139,8 @@ Station-level forecast (53 stations, reg:squarederror): Precision@10 0.80, media
 ## Screenshots
 
 **Dashboard Overview**
-<img width="1907" height="863" alt="image" src="https://github.com/user-attachments/assets/0ac46b1a-ed39-48b1-ad11-b8ed63b3158c" />
+<img width="1528" height="767" alt="image" src="https://github.com/user-attachments/assets/db75af74-9f84-4f18-b98a-898915ac6234" />
+
 
 
 **Live Map & Route Optimizer**
