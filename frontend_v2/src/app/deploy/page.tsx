@@ -79,6 +79,10 @@ function DeployContent() {
         </p>
       </header>
 
+      <p className="text-[10px] text-text-secondary font-light tracking-wide -mt-6">
+        Adjust <span className="text-text-primary">Patrol Units</span> in the left sidebar to recalculate coverage and the roster below.
+      </p>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-transparent border border-border p-8 flex flex-col justify-between">
@@ -97,8 +101,8 @@ function DeployContent() {
         </div>
         <div className="bg-transparent border border-border p-8 flex flex-col justify-between">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-8">Priority Coverage</div>
-          <div className="text-4xl font-light text-text-primary tracking-tight">{covPct.toFixed(1)}%</div>
-          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">spatial risk-weighted</div>
+          <div className={`text-4xl font-light tracking-tight ${covPct < 60 ? 'text-critical' : covPct < 80 ? 'text-amber-400' : 'text-patrol'}`}>{covPct.toFixed(1)}%</div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">of high-risk zones covered — {(100 - covPct).toFixed(1)}% remain unpatrolled</div>
         </div>
       </div>
 
@@ -109,8 +113,8 @@ function DeployContent() {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={coverageCurve} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#2F333D" vertical={false} />
-              <XAxis dataKey="units" stroke="#9CA3AF" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickMargin={10} />
-              <YAxis stroke="#9CA3AF" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickMargin={10} domain={[0, 100]} />
+              <XAxis dataKey="units" stroke="#9CA3AF" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickMargin={10} label={{ value: 'Patrol Units', position: 'insideBottom', offset: -5, fill: '#9CA3AF', fontSize: 11 }} />
+              <YAxis stroke="#9CA3AF" tick={{ fontSize: 12, fill: '#9CA3AF' }} tickMargin={10} domain={[0, 100]} label={{ value: 'Hotspot Coverage %', angle: -90, position: 'insideLeft', fill: '#9CA3AF', fontSize: 11 }} />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#000', borderColor: '#222', color: '#fff' }}
               />

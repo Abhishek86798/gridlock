@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getForecast, getStationForecast } from "@/lib/api";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { X, AlertTriangle, ArrowUp, ArrowDown, Minus } from "lucide-react";
+import Link from "next/link";
 
 export default function ForecastPage() {
   const [data, setData] = useState<any>(null);
@@ -65,9 +66,9 @@ export default function ForecastPage() {
           )}
         </div>
         <div className="bg-transparent border border-border p-8">
-          <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Model MAE</div>
+          <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Forecast Accuracy</div>
           <div className="text-4xl font-light tracking-tight">{data?.model_mae?.toFixed(1) || 0}</div>
-          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">violations / hotspot</div>
+          <div className="text-[10px] text-text-secondary mt-2 tracking-wide">avg error ±{data?.model_mae?.toFixed(1) || 0} violations/hotspot/week</div>
         </div>
         <div className="bg-transparent border border-border p-8">
           <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-2">Spiking</div>
@@ -130,8 +131,15 @@ export default function ForecastPage() {
                 </div>
               ))}
             </div>
-            <div className="p-6 border-t border-border bg-bg-base rounded-b-xl flex justify-end">
-              <button 
+            <div className="p-6 border-t border-border bg-bg-base rounded-b-xl flex justify-end gap-3">
+              <Link
+                href="/deploy"
+                onClick={() => setIsAlertModalOpen(false)}
+                className="text-sm font-medium text-text-primary bg-[#EF4444]/10 hover:bg-[#EF4444]/20 px-6 py-2 rounded transition-colors"
+              >
+                Go to Patrol Deployment →
+              </Link>
+              <button
                 onClick={() => setIsAlertModalOpen(false)}
                 className="text-sm font-medium text-text-primary bg-text-primary/10 hover:bg-text-primary/20 px-6 py-2 rounded transition-colors"
               >
@@ -174,9 +182,9 @@ export default function ForecastPage() {
               <th className="px-6 py-6 text-right">Predicted</th>
               <th className="px-6 py-6 text-right">Baseline</th>
               <th className="px-6 py-6 text-right">Delta</th>
-              <th className="px-6 py-6 text-right">Change</th>
+              <th className="px-6 py-6 text-right">Change vs 5-wk avg</th>
               <th className="px-6 py-6 text-center">Status</th>
-              <th className="px-6 py-6">Why</th>
+              <th className="px-6 py-6" title="The model's top reason this hotspot is forecast to spike — based on its recent trend, surrounding cluster, and seasonal patterns">Why it&apos;s rising</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -225,6 +233,10 @@ export default function ForecastPage() {
           </tbody>
         </table>
       </div>
+
+      <p className="text-[10px] text-text-secondary font-light tracking-wide -mt-8">
+        ↑ = factor pushing violations higher this week · ↓ = factor stabilising the hotspot · Factors are the model&apos;s top drivers from historical patterns.
+      </p>
 
       {/* Full Volume-Ranked List (expandable) */}
       <details className="border border-border">
@@ -297,21 +309,21 @@ export default function ForecastPage() {
               <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-3">Top-10 Ranking Accuracy</div>
               <div className="flex items-baseline gap-3">
                 <span className="text-4xl font-light tracking-tight text-patrol">
-                  {stationData.precision_at?.[10] != null ? stationData.precision_at[10].toFixed(2) : "—"}
+                  {stationData.precision_at?.[10] != null ? `${(stationData.precision_at[10] * 100).toFixed(0)}%` : "—"}
                 </span>
                 <span className="text-sm font-light text-text-secondary">station</span>
                 <span className="text-text-muted">vs</span>
                 <span className="text-2xl font-light tracking-tight text-critical">
-                  {stationData.hotspot_precision_at?.[10] != null ? stationData.hotspot_precision_at[10].toFixed(2) : "—"}
+                  {stationData.hotspot_precision_at?.[10] != null ? `${(stationData.hotspot_precision_at[10] * 100).toFixed(0)}%` : "—"}
                 </span>
                 <span className="text-sm font-light text-text-secondary">hotspot</span>
               </div>
-              <div className="text-[10px] text-text-secondary mt-3 tracking-wide">Precision@10 — coarser grain ranks the top zones better</div>
+              <div className="text-[10px] text-text-secondary mt-3 tracking-wide">8 in 10 top-ranked stations are genuinely high-risk — reliable for shift planning</div>
             </div>
 
             {/* Card 2 — noise: station CV vs hotspot CV */}
             <div className="bg-transparent border border-border p-8">
-              <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-3">Week-to-Week Noise (CV)</div>
+              <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary mb-3">Forecast Stability</div>
               <div className="flex items-baseline gap-3">
                 <span className="text-4xl font-light tracking-tight text-patrol">{stationData.median_cv?.toFixed(2)}</span>
                 <span className="text-sm font-light text-text-secondary">station</span>
@@ -319,7 +331,7 @@ export default function ForecastPage() {
                 <span className="text-2xl font-light tracking-tight text-critical">{stationData.hotspot_median_cv?.toFixed(2)}</span>
                 <span className="text-sm font-light text-text-secondary">hotspot</span>
               </div>
-              <div className="text-[10px] text-text-secondary mt-3 tracking-wide">Aggregating to stations roughly halves the noise</div>
+              <div className="text-[10px] text-text-secondary mt-3 tracking-wide">Station counts swing ±{stationData.median_cv != null ? (stationData.median_cv * 100).toFixed(0) : "—"}% week-to-week vs ±{stationData.hotspot_median_cv != null ? (stationData.hotspot_median_cv * 100).toFixed(0) : "—"}% at hotspot level — far more stable for planning</div>
             </div>
 
             {/* Card 3 — the design-choice caption */}
@@ -341,7 +353,7 @@ export default function ForecastPage() {
                   <th className="px-6 py-6">Station</th>
                   <th className="px-6 py-6 text-right">Predicted</th>
                   <th className="px-6 py-6 text-right">Baseline</th>
-                  <th className="px-6 py-6 text-right">Change</th>
+                  <th className="px-6 py-6 text-right">Change vs baseline</th>
                   <th className="px-6 py-6 text-center">Trend</th>
                   <th className="px-6 py-6">Peak Shifts</th>
                 </tr>

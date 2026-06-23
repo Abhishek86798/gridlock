@@ -22,7 +22,7 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
           <header className="space-y-4 mb-8">
             <h1 className="text-4xl font-light tracking-tight text-text-primary">POI SPILLOVER</h1>
             <p className="text-text-secondary font-light text-xs tracking-wide leading-relaxed">
-              Analysis of parking violations around major Points of Interest. Click a category to highlight tagged hotspots on the map.
+              Parking violations cluster near metro stations, malls, hospitals, and schools. Click a category to highlight affected hotspots on the map.
             </p>
           </header>
 
@@ -30,7 +30,7 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
             <div className="bg-transparent border border-border p-6 mb-8">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">
-                  Metro & Rail Proximity Effect
+                  Metro Station Effect
                 </div>
                 <Train size={14} className="text-text-primary" strokeWidth={1} />
               </div>
@@ -38,7 +38,7 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
                 {metroShare}%
               </div>
               <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
-                of violations occur at hotspots near metro stations and railway stops
+                of all violations occur within 500m of a metro station
               </div>
             </div>
           )}
@@ -49,6 +49,7 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
                 <tr>
                   <th className="px-4 py-4">Category</th>
                   <th className="px-4 py-4 text-right">Hotspots</th>
+                  <th className="px-4 py-4 text-right">Violations</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -62,6 +63,7 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
                     >
                       <td className="px-4 py-4 font-light text-text-primary capitalize">{row.poi_category}</td>
                       <td className="px-4 py-4 text-right font-light text-text-primary">{row.hotspot_count}</td>
+                      <td className="px-4 py-4 text-right font-light text-text-secondary">{row.total_violations?.toLocaleString()}</td>
                     </tr>
                   );
                 })}
@@ -69,9 +71,14 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
             </table>
           </div>
           
-          {selectedCategory && (
+          {selectedCategory ? (
             <div className="mt-8 p-4 border border-fuchsia-500/30 bg-fuchsia-900/10 text-xs text-text-secondary">
               Viewing <span className="text-fuchsia-400 font-bold uppercase">{selectedCategory}</span> hotspots. Map markers are highlighted in fuchsia.
+            </div>
+          ) : (
+            <div className="mt-8 p-4 border border-border text-xs text-text-secondary">
+              <p className="text-text-primary font-light mb-1">How to use this page</p>
+              <p>Click a category to highlight hotspots on the map. Use the Live Map to plan patrol routes near high-density POI clusters.</p>
             </div>
           )}
         </div>

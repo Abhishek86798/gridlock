@@ -188,11 +188,11 @@ export default function LiveMap({ hotspots, assignments = [], highlightPoi }: { 
                     <span className="font-light text-text-primary">{hs.risk_score?.toFixed(1)}</span>
                   </div>
                   <div className="flex justify-between mb-1">
-                    <span className="text-text-secondary text-[10px] uppercase tracking-[0.2em]">Vio</span>
+                    <span className="text-text-secondary text-[10px] uppercase tracking-[0.2em]">Violations</span>
                     <span className="font-light text-text-primary">{hs.violation_count}</span>
                   </div>
                   <div className="flex justify-between pb-1">
-                    <span className="text-text-secondary text-[10px] uppercase tracking-[0.2em]">Win</span>
+                    <span className="text-text-secondary text-[10px] uppercase tracking-[0.2em]">Peak Hours</span>
                     <span className="font-light text-text-primary">{hs.logging_window}</span>
                   </div>
                   {hs.poi_category && (

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getStats, getPriority } from "@/lib/api";
 import { ShieldAlert, MapPin, Building2, EyeOff } from "lucide-react";
 
@@ -62,7 +63,7 @@ export default async function OverviewPage({
               <tr>
                 <th className="px-6 py-4 font-light tracking-wider">#</th>
                 <th className="px-6 py-4 font-light tracking-wider">Zone</th>
-                <th className="px-6 py-4 font-light tracking-wider text-right">Risk</th>
+                <th className="px-6 py-4 font-light tracking-wider text-right">Risk Score (0–100)</th>
                 <th className="px-6 py-4 font-light tracking-wider">Peak Block</th>
                 <th className="px-6 py-4 font-light tracking-wider">Station</th>
                 <th className="px-6 py-4 font-light tracking-wider">Tier</th>
@@ -93,6 +94,17 @@ export default async function OverviewPage({
           </table>
         </div>
       </div>
+
+      {/* CTA — bridge to Patrol Deployment */}
+      <div className="border border-border p-6 flex items-center justify-between">
+        <div>
+          <p className="text-sm text-text-primary font-light">Ready to act on these hotspots?</p>
+          <p className="text-xs text-text-secondary mt-1">Use Patrol Deployment to generate an optimised unit roster for next week.</p>
+        </div>
+        <Link href="/deploy" className="text-xs uppercase tracking-widest px-6 py-3 border border-border hover:bg-bg-elevated transition-colors">
+          Go to Patrol Deployment →
+        </Link>
+      </div>
     </div>
   );
 }
@@ -113,8 +125,8 @@ function KpiCard({ title, value, icon: Icon }: any) {
 
 function TierBadge({ tier }: { tier: string }) {
   const styles: Record<string, string> = {
-    Critical: "text-text-primary border border-text-primary",
-    Elevated: "text-text-secondary border border-text-secondary",
+    Critical: "text-red-400 border-red-500/50 bg-red-900/20",
+    Elevated: "text-amber-400 border-amber-500/50 bg-amber-900/20",
     Standard: "text-text-muted border border-border",
   };
   

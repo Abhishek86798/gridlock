@@ -21,7 +21,7 @@ export default async function JunctionsPage() {
             <tr>
               <th className="px-8 py-6">Junction Name</th>
               <th className="px-8 py-6 text-right">Violations</th>
-              <th className="px-8 py-6 text-right">Avg Risk Score</th>
+              <th className="px-8 py-6 text-right">Avg Risk Score (0–100)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">

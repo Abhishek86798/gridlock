@@ -22,7 +22,7 @@ export default async function StationsPage() {
               <th className="px-8 py-6">Station Name</th>
               <th className="px-8 py-6 text-right">Hotspots</th>
               <th className="px-8 py-6 text-right">Violations</th>
-              <th className="px-8 py-6 text-right">Avg Risk</th>
+              <th className="px-8 py-6 text-right">Avg Risk (0–100)</th>
               <th className="px-8 py-6 text-right">Blind Spot %</th>
             </tr>
           </thead>
