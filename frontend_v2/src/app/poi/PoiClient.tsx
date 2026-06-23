@@ -30,7 +30,7 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
             <div className="bg-transparent border border-border p-6 mb-8">
               <div className="flex items-center justify-between mb-6">
                 <div className="text-[10px] font-light uppercase tracking-[0.2em] text-text-secondary">
-                  Metro Spillover
+                  Metro & Rail Proximity Effect
                 </div>
                 <Train size={14} className="text-text-primary" strokeWidth={1} />
               </div>
@@ -38,7 +38,7 @@ export default function PoiClient({ stats, hotspots }: { stats: any[]; hotspots:
                 {metroShare}%
               </div>
               <div className="text-[10px] text-text-secondary mt-2 tracking-wide">
-                of tagged violations at metro-proximate hotspots
+                of violations occur at hotspots near metro stations and railway stops
               </div>
             </div>
           )}
